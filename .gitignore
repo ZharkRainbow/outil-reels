@@ -1,0 +1,19 @@
+# Le vocabulaire reel contient des noms de personnes et de clients.
+vocabulaire.json
+
+# Rushes, proxys, rendus : lourds et prives.
+lots/
+rendus/
+outil/cadrages/
+*.mp4
+*.mov
+*.wav
+*.m4a
+*.srt
+
+# Binaire compile a l'installation.
+outils/reperer-visage
+
+__pycache__/
+*.pyc
+.DS_Store

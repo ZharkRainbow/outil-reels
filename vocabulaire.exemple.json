@@ -1,0 +1,168 @@
+{
+ "_lisez_moi": "Corrections appliquees aux sous-titres. Les cles se comparent sans accent, sans majuscule et sans ponctuation : ecrire 'leborgne', pas 'Lebôrgne'.",
+ "mot_a_mot": {
+  "chatgpt": "ChatGPT",
+  "sass": "SaaS",
+  "saas": "SaaS",
+  "col-col": "cold call",
+  "colcol": "cold call",
+  "linkedin": "LinkedIn",
+  "youtube": "YouTube",
+  "pme": "PME"
+ },
+ "suites": [
+  [
+   [
+    "cloud",
+    "code"
+   ],
+   [
+    "Claude",
+    "Code"
+   ]
+  ],
+  [
+   [
+    "call",
+    "call"
+   ],
+   [
+    "cold",
+    "call"
+   ]
+  ],
+  [
+   [
+    "chat",
+    "gpt"
+   ],
+   [
+    "ChatGPT"
+   ]
+  ],
+  [
+   [
+    "il",
+    "ya"
+   ],
+   [
+    "il",
+    "y",
+    "a"
+   ]
+  ]
+ ],
+ "hallucinations": [
+  [
+   "sous",
+   "titrage"
+  ],
+  [
+   "sous-titrage"
+  ],
+  [
+   "merci",
+   "d'avoir",
+   "regarde"
+  ],
+  [
+   "abonnez",
+   "vous"
+  ],
+  [
+   "amara",
+   "org"
+  ]
+ ],
+ "marque": {
+  "nom": "",
+  "nom_groupe": "",
+  "debuts": [],
+  "fins": [],
+  "fins_groupe": [],
+  "mots_vrais": []
+ },
+ "nom_de_famille": {
+  "prenom": "",
+  "nom": "",
+  "initiale": "",
+  "longueur_min": 4,
+  "exceptions": []
+ },
+ "jargon": [
+  "linkedin",
+  "instagram",
+  "whatsapp",
+  "youtube",
+  "saas",
+  "crm",
+  "ltv",
+  "nps",
+  "tjm",
+  "icp",
+  "seo",
+  "sea",
+  "roi",
+  "kpi",
+  "kpis",
+  "ugc",
+  "b2b",
+  "b2c",
+  "pme",
+  "ceo",
+  "coo",
+  "cmo",
+  "dm",
+  "dms",
+  "reach",
+  "setter",
+  "setting",
+  "closing",
+  "closer",
+  "close",
+  "lead",
+  "leads",
+  "cold",
+  "call",
+  "email",
+  "emails",
+  "mailing",
+  "nurturing",
+  "onboarding",
+  "pipeline",
+  "funnel",
+  "copywriting",
+  "growth",
+  "scalable",
+  "mindset",
+  "chatgpt",
+  "fomo",
+  "reels",
+  "reel",
+  "story",
+  "stories",
+  "podcast",
+  "presta",
+  "prestas",
+  "propale",
+  "propales",
+  "upsell",
+  "checker",
+  "demos",
+  "reco",
+  "deal",
+  "deals",
+  "ok",
+  "ouais",
+  "bah",
+  "hop",
+  "genre",
+  "punchline",
+  "cash",
+  "workflow",
+  "newsletter",
+  "drastiquement",
+  "decorrele",
+  "decorreles"
+ ]
+}

@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Outil de reels</title>
+<style>
+:root{--bleu:#2322E0;--jaune:#FAD400;--noir:#191919;--gris:#26262b;--bord:#3a3a42}
+*{box-sizing:border-box}
+body{margin:0;background:#141417;color:#e8e8ea;font:13px/1.5 -apple-system,system-ui,sans-serif;overflow:hidden}
+header{display:flex;align-items:center;gap:16px;padding:10px 16px;background:var(--noir);border-bottom:1px solid var(--bord)}
+h1{font-size:14px;margin:0;font-weight:600}
+.seg{display:flex;border:1px solid var(--bord);border-radius:7px;overflow:hidden}
+.seg button{background:var(--gris);color:#aaa;border:0;padding:6px 13px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--bleu);color:#fff}
+.sp{flex:1}
+main{display:grid;grid-template-columns:1fr 330px;gap:12px;padding:12px;height:calc(100vh - 168px)}
+body.reels main{height:calc(100vh - 236px)}
+/* lot a une camera : pas de panneau tablette, formats horizontal et carre */
+#fmt button[data-f=hsolo],#fmt button[data-f=carre]{display:none}
+body.solo #fmt button{display:none}
+/* formats a deux cameras : caches tant que le manifeste du lot ne les demande pas */
+#fmt button[data-mc]{display:none}
+body.solo #fmt button[data-f=hsolo],body.solo #fmt button[data-f=carre]{display:block}
+body.solo .sources{grid-template-rows:1fr}
+body.solo .sources .src:nth-child(2){display:none}
+.sources{display:grid;grid-template-rows:1fr 1fr;gap:10px;min-height:0}
+.src{background:var(--gris);border:1px solid var(--bord);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.src h2{font-size:11px;margin:0;padding:6px 10px;background:#1e1e23;color:#9a9aa2;font-weight:600;text-transform:uppercase;letter-spacing:.5px;display:flex;justify-content:space-between}
+.val{font:11px ui-monospace,monospace;color:var(--jaune);text-transform:none;letter-spacing:0}
+.val b{color:#ff5b7a}
+.stage{position:relative;line-height:0;overflow:hidden;flex:1;display:flex;align-items:center;justify-content:center;background:#000}
+.stage video,.stage canvas{max-width:100%;max-height:100%;display:block}
+
+.wrap{position:relative;line-height:0;display:inline-block;width:fit-content}
+.box{position:absolute;border:2px solid var(--jaune);box-shadow:0 0 0 4000px rgba(0,0,0,.6);cursor:move}
+.box.sel{border-color:#4ef}
+.box i{position:absolute;width:16px;height:16px;background:var(--jaune);border-radius:3px;border:2px solid #141417}
+.box i.nw{left:-8px;top:-8px;cursor:nwse-resize}.box i.ne{right:-8px;top:-8px;cursor:nesw-resize}
+.box i.sw{left:-8px;bottom:-8px;cursor:nesw-resize}.box i.se{right:-8px;bottom:-8px;cursor:nwse-resize}
+aside{background:var(--gris);border:1px solid var(--bord);border-radius:8px;padding:12px;overflow:auto;min-height:0}
+aside h2{font-size:11px;margin:0 0 8px;color:#9a9aa2;text-transform:uppercase;letter-spacing:.5px}
+#apercu{width:100%;background:#000;border-radius:5px;display:block;max-height:44vh;object-fit:contain}
+.piste{padding:8px 16px 14px;background:var(--noir);border-top:1px solid var(--bord)}
+.rail{position:relative;height:38px;background:#1b1b20;border:1px solid var(--bord);border-radius:6px;cursor:pointer;margin-bottom:8px}
+.zone{position:absolute;top:0;bottom:0;background:rgba(35,34,224,.25);border-left:2px solid var(--bleu);pointer-events:none}
+.mk{position:absolute;top:0;bottom:0;width:3px;background:var(--jaune);cursor:pointer}
+.mk:hover,.mk.on{background:#4ef;width:5px;margin-left:-1px}
+.mk span{position:absolute;top:-1px;left:4px;font:10px ui-monospace,monospace;color:var(--jaune);white-space:nowrap;pointer-events:none}
+.tete{position:absolute;top:-3px;bottom:-3px;width:2px;background:#fff;pointer-events:none;box-shadow:0 0 6px #fff}
+.cmd{display:flex;gap:8px;align-items:center}
+button.act{background:var(--bleu);color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600}
+button.act.g{background:#34343c}
+button.act:disabled{opacity:.35;cursor:default}
+.tc{font:13px ui-monospace,Menlo,monospace;color:var(--jaune);min-width:96px}
+table{width:100%;border-collapse:collapse;font:11px ui-monospace,monospace}
+td,th{text-align:left;padding:3px 5px;border-bottom:1px solid var(--bord)}
+th{color:#8a8a92}
+tr.on td{background:rgba(78,255,255,.12)}
+tr[data-i]{cursor:pointer}
+td button{background:none;border:0;color:#ff5b7a;cursor:pointer;font-size:14px}
+.hint{color:#8a8a92;font-size:11px;line-height:1.5;margin:8px 0 0}
+textarea{width:100%;height:90px;background:#141417;color:var(--jaune);border:1px solid var(--bord);border-radius:5px;font:10px ui-monospace,monospace;padding:6px;margin-top:6px}
+/* reels : coupes sur la piste, mini-timeline des debuts */
+.cut{position:absolute;top:0;bottom:0;background:rgba(255,91,122,.45);cursor:pointer;z-index:1}
+.cut.off{background:none;outline:1px dashed rgba(255,91,122,.7);outline-offset:-1px}
+.deb{position:absolute;top:0;bottom:0;width:2px;background:#3ddc84;z-index:2}
+.deb span{position:absolute;bottom:1px;left:4px;font:10px ui-monospace,monospace;color:#3ddc84;pointer-events:none}
+.fin{position:absolute;top:0;bottom:0;width:2px;background:#ff5b7a;pointer-events:none;z-index:2}
+.mini{position:relative;height:30px;background:#1b1b20;border:1px solid var(--bord);border-radius:6px;cursor:pointer;margin-bottom:6px;overflow:hidden}
+.mini .deb{cursor:ew-resize;width:3px}
+.mot{position:absolute;top:3px;font:9px/12px -apple-system,sans-serif;color:#9a9aa2;white-space:nowrap;pointer-events:none;border-left:1px solid #44444c;padding-left:2px}
+.blanc{position:absolute;bottom:0;height:9px;background:rgba(255,91,122,.4);pointer-events:none}
+.blanc.off{background:rgba(255,255,255,.08)}
+.debuts{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;min-height:22px;font-size:11px;color:#8a8a92}
+.chip{display:flex;align-items:center;gap:5px;background:#1d2922;border:1px solid #2f5b3c;border-radius:12px;padding:1px 4px 1px 9px;color:#cfe;font:11px ui-monospace,monospace}
+.chip i{color:#8fb;font-style:normal}
+.chip button{background:none;border:0;color:#3ddc84;cursor:pointer;font-size:12px;padding:0 3px}
+.chip button.x{color:#ff5b7a}
+button.act.v{background:#1f7a45}
+.chk{display:flex;gap:5px;align-items:center;font-size:12px;color:#aaa;cursor:pointer}
+.reel-seul{display:none}
+body.reels .reel-seul{display:flex}
+body.reels .mini.reel-seul{display:block}
+input.txt{width:100%;background:#141417;color:#eee;border:1px solid var(--bord);border-radius:5px;padding:6px 8px;font-size:12px}
+</style></head><body>
+
+<header>
+  <h1>Outil de reels</h1>
+  <select id="lotSel" title="Changer de lot" style="background:var(--bleu);color:#fff;border:0;border-radius:6px;padding:6px 8px;font-size:12px;font-weight:600">
+    </select>
+  <div class="seg" id="fmt">
+    <button data-f="vmc" class="on">Vertical 50/50</button>
+    <button data-f="hmc">Horizontal</button>
+    <button data-f="vcons">Vertical consulting</button>
+    <button data-f="hsolo">Horizontal</button>
+    <button data-f="carre">Carré 1:1</button>
+    <button data-f="v7030" data-mc>Vertical 70/30</button>
+    <button data-f="v6535" data-mc>Vertical 65/35</button>
+    <button data-f="v6040" data-mc>Vertical 60/40</button>
+    <button data-f="h5050" data-mc>Horizontal 50/50</button>
+  </div>
+  <select id="passage" style="background:var(--gris);color:#ddd;border:1px solid var(--bord);border-radius:6px;padding:6px 8px;font-size:12px">
+    <option value="">Toute la prise</option></select>
+  <span class="val" id="infoFmt"></span><span class="sp"></span>
+  <button class="act g" id="charger">Reprendre une session</button>
+</header>
+
+<main>
+  <div class="sources">
+    <div class="src"><h2>Camera — haut <span class="val" id="valA"></span></h2>
+      <div class="stage"><div class="wrap" id="wA"><canvas id="miroirA" width="640" height="360"></canvas>
+        <div class="box" id="bA"><i class="nw"></i><i class="ne"></i><i class="sw"></i><i class="se"></i></div></div></div></div>
+    <div class="src"><h2>Ecran — bas <span class="val" id="valB"></span></h2>
+      <div class="stage"><div class="wrap" id="wB"><canvas id="miroirB" width="640" height="360"></canvas>
+        <div class="box" id="bB"><i class="nw"></i><i class="ne"></i><i class="sw"></i><i class="se"></i></div></div></div></div>
+  </div>
+  <aside>
+    <h2>Apercu</h2><canvas id="apercu"></canvas>
+    <h2 style="margin-top:12px">Cadrages poses <span class="val" id="nbPts"></span></h2>
+    <table><tbody id="pts"></tbody></table>
+    <p class="hint"><b>Par defaut le cadrage TIENT</b> jusqu'au point suivant, puis saute.
+    Coche <b>glisse</b> sur un point si tu veux qu'il derive doucement vers le suivant.<br>
+    Clic sur un marqueur ou une ligne pour t'y placer et recharger son cadrage.
+    <b>Corriger ce point</b> ecrase le point selectionne avec le cadre actuel.</p>
+    <div class="reel-seul" style="flex-direction:column;gap:6px;margin-top:12px">
+      <h2 style="margin:0">Titre du bandeau</h2>
+      <input class="txt" id="titre" placeholder="Vide : pas de bandeau">
+      <button class="act v" style="width:100%" id="exporter">Exporter (un fichier par debut)</button>
+    </div>
+    <textarea id="sortie" readonly></textarea>
+    <button class="act" style="width:100%;margin-top:6px" id="envoyer">Enregistrer le cadrage</button>
+    <button class="act g" style="width:100%;margin-top:5px" id="copier">ou copier le JSON</button>
+    <p class="hint" id="etat"></p>
+  </aside>
+</main>
+
+<video id="vid" src="proxy.mp4" playsinline preload="auto" style="position:fixed;left:-4px;top:-4px;width:2px;height:2px;opacity:.01;pointer-events:none"></video>
+<div class="piste">
+  <div class="rail" id="rail"><div class="tete" id="tete"></div></div>
+  <div class="mini reel-seul" id="mini" title="Zoom sur le debut : glisse un marqueur vert pour regler un debut"><div class="tete" id="teteMini"></div></div>
+  <div class="debuts reel-seul" id="debuts"></div>
+  <div class="cmd">
+    <button class="act" id="play">Lecture</button>
+    <span class="tc" id="tc">00:00.0</span>
+    <button class="act g" id="m10">-10s</button><button class="act g" id="m1">-1s</button>
+    <button class="act g" id="p1">+1s</button><button class="act g" id="p10">+10s</button>
+    <label class="chk reel-seul"><input type="checkbox" id="sauter" checked> Sauter les coupes</label>
+    <span class="sp"></span>
+    <button class="act v reel-seul" id="debutIci">+ Debut ici</button>
+    <button class="act g reel-seul" id="finIci">Fin ici</button>
+    <button class="act g reel-seul" id="couperIci" title="Premier clic : debut de la coupe. Second clic : fin.">Couper ici</button>
+    <button class="act" id="ajouter">Poser un cadrage ici</button>
+    <button class="act g" id="maj" disabled>Corriger ce point</button>
+    <button class="act g" id="prec">&lt; point precedent</button><button class="act g" id="suiv">point suivant &gt;</button>
+    
+  </div>
+</div>
+
+<script>
+const SRC_W=3840,SRC_H=2160;
+let DUREE=0;            // vraie duree lue dans le manifeste du lot
+const FORMATS={
+ vmc:{nom:"1080x1920 — 50/50",W:1080,H:1920,a:{x:0,y:0,w:1080,h:960},b:{x:0,y:960,w:1080,h:960},fond:"#D4CCBE"},
+ hmc:{nom:"1920x1080 — camera 720 a gauche",W:1920,H:1080,a:{x:0,y:0,w:720,h:1080},b:{x:720,y:0,w:1200,h:1080},fond:"#000"},
+ vcons:{nom:"1080x1920 — deux etages, meme rush",W:1080,H:1920,a:{x:0,y:0,w:1080,h:960},b:{x:0,y:960,w:1080,h:960},fond:"#000"},
+ hsolo:{nom:"1920x1080 — une camera, sous-titres a cote du visage",W:1920,H:1080,a:{x:0,y:0,w:1920,h:1080},b:null,fond:"#000"},
+ carre:{nom:"1080x1080 — video d'origine au centre, bandes noires",W:1080,H:1080,a:{x:0,y:236,w:1080,h:608},b:null,fond:"#000"},
+ // une camera suivie automatiquement en haut, le public en bas (proportions a comparer)
+ v7030:{nom:"1080x1920 — haut 70 %, bas 30 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1344},b:{x:0,y:1344,w:1080,h:576},fond:"#000"},
+ v6535:{nom:"1080x1920 — haut 65 %, bas 35 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1248},b:{x:0,y:1248,w:1080,h:672},fond:"#000"},
+ v6040:{nom:"1080x1920 — haut 60 %, bas 40 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1152},b:{x:0,y:1152,w:1080,h:768},fond:"#000"},
+ h5050:{nom:"1920x1080 — gauche 50 %, droite 50 %",W:1920,H:1080,a:{x:0,y:0,w:960,h:1080},b:{x:960,y:0,w:960,h:1080},fond:"#000"}};
+let fmt="vmc", points=[], sel=-1, actif='B', joue=false;
+// Sous-selections a cadrer separement dans une longue prise. Le manifeste du
+// lot peut en fournir via son champ "passages" : [[titre, debut, fin], ...].
+const PASSAGES=[];
+let borneA=0, borneB=0;
+const vid=vId('vid'),cvs=vId('apercu'),ctx=cvs.getContext('2d');
+const mirA=vId('miroirA'),mcA=mirA.getContext('2d');
+const mirB=vId('miroirB'),mcB=mirB.getContext('2d');
+// Le proxy contient les DEUX rushes cote a cote (1280x360) plus l'audio.
+// Un seul element media : il ne peut pas se desynchroniser d'avec lui-meme.
+const DEMI=640, ECH=SRC_W/DEMI;   // 3840 / 640 = 6
+const vA=vid, vB=vid, son=vid;
+const crop={A:{x:400,y:120,w:2200,h:1956},B:{x:800,y:120,w:2200,h:1956}};
+function vId(i){return document.getElementById(i)}
+function ratio(k){const f=FORMATS[fmt],z=k==='A'?f.a:(f.b||f.a);return z.w/z.h}
+function clamp(k){const c=crop[k],r=ratio(k);
+ c.h=Math.round(c.w/r);
+ if(c.h>SRC_H){c.h=SRC_H;c.w=Math.round(c.h*r)}
+ if(c.w>SRC_W){c.w=SRC_W;c.h=Math.round(c.w/r)}
+ c.x=Math.max(0,Math.min(Math.round(c.x),SRC_W-c.w));
+ c.y=Math.max(0,Math.min(Math.round(c.y),SRC_H-c.h))}
+function boites(){for(const k of ['A','B']){clamp(k);
+ const c=crop[k],box=vId('b'+k),v=box.previousElementSibling,s=v.clientWidth/SRC_W;
+ box.style.left=(c.x*s)+'px';box.style.top=(c.y*s)+'px';
+ box.style.width=(c.w*s)+'px';box.style.height=(c.h*s)+'px';
+ box.classList.toggle('sel',actif===k);
+ const bv=(SRC_H-c.h)===0,bh=(SRC_W-c.w)===0;
+ vId('val'+k).innerHTML=`${c.w}x${c.h} @ ${c.x},${c.y}`+(bv?' <b>bloque en hauteur</b>':'')+(bh?' <b>bloque en largeur</b>':'')}}
+// interpolation entre deux points poses
+function cadrageA(t){
+ const p=[...points].filter(dansPassage).sort((a,b)=>a.t-b.t);
+ if(!p.length)return null;
+ if(t<=p[0].t)return p[0];
+ if(t>=p[p.length-1].t)return p[p.length-1];
+ for(let i=0;i<p.length-1;i++){if(t>=p[i].t&&t<=p[i+1].t){
+   if(!p[i].glisse)return p[i];              // palier : on tient la valeur
+   const f=(t-p[i].t)/(p[i+1].t-p[i].t),m=(a,b)=>Math.round(a+(b-a)*f);
+   const mix=z=>({x:m(p[i][z].x,p[i+1][z].x),y:m(p[i][z].y,p[i+1][z].y),
+                  w:m(p[i][z].w,p[i+1][z].w),h:m(p[i][z].h,p[i+1][z].h)});
+   return {t,A:mix('A'),B:mix('B')}}}
+ return p[0]}
+function apercu(){
+ const f=FORMATS[fmt];
+ if(cvs.width!==f.W){cvs.width=f.W;cvs.height=f.H}
+ ctx.fillStyle=f.fond;ctx.fillRect(0,0,f.W,f.H);
+ let c = (joue && points.length) ? cadrageA(vid.currentTime)||{A:crop.A,B:crop.B} : {A:crop.A,B:crop.B};
+ const s=suiviA(vid.currentTime);if(s)c={...c,A:s};
+ const decB = (fmt==='vcons') ? 0 : DEMI;   // consulting : les deux cadres dans le meme rush
+ try{
+  ctx.drawImage(vid,c.A.x/ECH,c.A.y/ECH,c.A.w/ECH,c.A.h/ECH,f.a.x,f.a.y,f.a.w,f.a.h);
+  if(f.b)ctx.drawImage(vid,decB+c.B.x/ECH,c.B.y/ECH,c.B.w/ECH,c.B.h/ECH,f.b.x,f.b.y,f.b.w,f.b.h);
+ }catch(err){}
+ requestAnimationFrame(apercu)}
+// glisser, molette, clavier
+for(const k of ['A','B']){
+ const box=vId('b'+k);
+ box.addEventListener('pointerdown',e=>{e.preventDefault();actif=k;
+  const coin=e.target===box?'':e.target.className, v=box.previousElementSibling;
+  const ech=SRC_W/v.clientWidth, d={sx:e.clientX,sy:e.clientY,...crop[k]};
+  const bouge=m=>{const dx=(m.clientX-d.sx)*ech,dy=(m.clientY-d.sy)*ech,c=crop[k];
+   if(coin===''){c.x=d.x+dx;c.y=d.y+dy}
+   else{let w=(coin==='nw'||coin==='sw')?d.w-dx:d.w+dx;
+    c.w=Math.max(300,w);c.h=c.w/ratio(k);
+    c.x=(coin==='nw'||coin==='sw')?d.x+d.w-c.w:d.x;
+    c.y=(coin==='nw'||coin==='ne')?d.y+d.h-c.h:d.y}
+   clamp(k);boites()};
+  const fin=()=>{removeEventListener('pointermove',bouge);removeEventListener('pointerup',fin);garder()};
+  addEventListener('pointermove',bouge);addEventListener('pointerup',fin)});
+ box.parentElement.addEventListener('wheel',e=>{e.preventDefault();actif=k;
+  const c=crop[k],cx=c.x+c.w/2,cy=c.y+c.h/2;
+  c.w=Math.max(300,Math.min(SRC_W,c.w*(e.deltaY>0?1.06:0.943)));
+  c.h=c.w/ratio(k);c.x=cx-c.w/2;c.y=cy-c.h/2;clamp(k);boites();garder()},{passive:false});
+}
+addEventListener('keydown',e=>{
+ if(e.target.tagName==='TEXTAREA'||e.target.type==='text')return;
+ if(e.code==='Space'){e.preventDefault();vId('play').click();return}
+ const pas=e.shiftKey?40:8,c=crop[actif];
+ if(e.key==='ArrowLeft')c.x-=pas;else if(e.key==='ArrowRight')c.x+=pas;
+ else if(e.key==='ArrowUp')c.y-=pas;else if(e.key==='ArrowDown')c.y+=pas;else return;
+ e.preventDefault();clamp(actif);boites();garder()});
+// temps
+// Trois elements media independants derivent des qu'on les laisse courir, et
+// un seek pendant la lecture les desynchronise franchement. On met tout en
+// pause, on cherche, on attend que les trois aient fini, puis on repart.
+function attendre(el){return new Promise(r=>{
+ if(el.readyState>=2&&!el.seeking)return r();
+ el.addEventListener('seeked',r,{once:true});setTimeout(r,500)})}
+function place(t){vid.currentTime=Math.max(borneA,Math.min(borneB,t));maj()}
+function maj(){const t=vid.currentTime,m=Math.floor(t/60);
+ vId('tc').textContent=String(m).padStart(2,'0')+':'+(t-60*m).toFixed(1).padStart(4,'0');
+ vId('tete').style.left=((t-borneA)/(borneB-borneA)*100)+'%';
+ if(reel){const W=fenetre();vId('teteMini').style.display=t>W?'none':'';vId('teteMini').style.left=(t/W*100)+'%'}}
+vId('rail').addEventListener('pointerdown',e=>{
+ if(e.target.classList.contains('mk'))return;
+ const r=e.currentTarget.getBoundingClientRect();place(borneA+(e.clientX-r.left)/r.width*(borneB-borneA))});
+vId('play').onclick=e=>{joue=!joue;
+ if(joue){vid.play().catch(()=>{joue=false;e.target.textContent='Lecture';
+   vId('etat').textContent='Lecture refusee par le navigateur, reclique.'});
+  e.target.textContent='Pause'}
+ else{vid.pause();e.target.textContent='Lecture'}};
+vid.addEventListener('pause',()=>{joue=false;vId('play').textContent='Lecture'});
+vid.addEventListener('play',()=>{joue=true;vId('play').textContent='Pause'});
+for(const [id,d] of [['m10',-10],['m1',-1],['p1',1],['p10',10]])
+ vId(id).onclick=()=>place((vid.currentTime)+d);
+setInterval(()=>{if(joue){maj();if(vid.currentTime>=borneB-0.05){vid.pause();place(borneB)}}},80);
+// points
+function rail(){
+ const r=vId('rail');[...r.querySelectorAll('.mk,.zone,.cut,.deb,.fin')].forEach(n=>n.remove());
+ if(reel)railReel(r);
+ const p=[...points].filter(dansPassage).sort((a,b)=>a.t-b.t);
+ p.forEach((pt,i)=>{
+  if(i<p.length-1&&pt.glisse){const z=document.createElement('div');z.className='zone';
+   z.style.left=((pt.t-borneA)/(borneB-borneA)*100)+'%';z.style.width=((p[i+1].t-pt.t)/(borneB-borneA)*100)+'%';r.appendChild(z)}
+  const d=document.createElement('div');d.className='mk'+(points.indexOf(pt)===sel?' on':'');
+  d.style.left=((pt.t-borneA)/(borneB-borneA)*100)+'%';
+  const m=Math.floor(pt.t/60);d.innerHTML=`<span>${m}:${(pt.t-60*m).toFixed(0).padStart(2,'0')}</span>`;
+  d.onclick=ev=>{ev.stopPropagation();aller(points.indexOf(pt))};
+  r.appendChild(d)})}
+function aller(i){sel=i;const p=points[i];
+ crop.A={...p.A};crop.B={...p.B};place(p.t);boites();table();rail();vId('maj').disabled=false}
+function table(){
+ const tb=vId('pts');tb.innerHTML='';
+ const tri=[...points].filter(dansPassage).sort((a,b)=>a.t-b.t);
+ vId('nbPts').textContent=tri.length?tri.length+' point(s)':'aucun';
+ tri.forEach(p=>{const i=points.indexOf(p),tr=document.createElement('tr');
+  tr.dataset.i=i;if(i===sel)tr.className='on';
+  const m=Math.floor(p.t/60);
+  tr.innerHTML=`<td>${m}:${(p.t-60*m).toFixed(1).padStart(4,'0')}</td>
+   <td>${p.B.x},${p.B.y}</td>
+   <td><label style="cursor:pointer"><input type="checkbox" ${p.glisse?'checked':''}
+    onchange="points[${i}].glisse=this.checked;sortie();rail()"> glisse</label></td><td></td>`;
+  tr.onclick=e=>{if(e.target.tagName!=='BUTTON')aller(i)};
+  const b=document.createElement('button');b.textContent='x';
+  b.onclick=e=>{e.stopPropagation();points.splice(i,1);sel=-1;vId('maj').disabled=true;table();rail();sortie()};
+  tr.lastChild.appendChild(b);tb.appendChild(tr)});
+ sortie()}
+const NOM_FORMAT={vmc:'vertical',hmc:'horizontal',vcons:'consulting',hsolo:'horizontal',carre:'carre',
+ v7030:'vertical 70-30',v6535:'vertical 65-35',v6040:'vertical 60-40',h5050:'horizontal 50-50'};
+function nomPassage(){if(reel)return reel.nom+' - '+NOM_FORMAT[fmt];const s=vId('passage');return s.value===''?'':PASSAGES[+s.value][0]}
+// un cadrage appartient au format dont il a les proportions : vertical et
+// horizontal d'un meme reel gardent chacun leurs cadres sans se melanger
+function duFormat(p){return Math.abs(p.A.w/p.A.h-ratio('A'))<0.03&&(!FORMATS[fmt].b||Math.abs(p.B.w/p.B.h-ratio('B'))<0.03)}
+function dansPassage(p){return p.t>=borneA-0.01&&p.t<=borneB+0.01&&(!reel||duFormat(p))}
+function sortie(){
+ const d={format:fmt,passage:nomPassage(),source:{w:SRC_W,h:SRC_H},
+  points:[...points].filter(dansPassage).sort((a,b)=>a.t-b.t)
+   .map(p=>({t:+p.t.toFixed(2),glisse:!!p.glisse,camera:p.A,ecran:p.B}))};
+ if(reel)Object.assign(d,{reel:reel.id,lot:LOT.lot||null,sortie:LOT.sortie||null,visage:visage,
+  camera:reel.camera,ecran:reel.ecran,decalage:reel.decalage,
+  retourner_ecran:!!reel.retourner_ecran,
+  debuts:debuts.map(t=>+t.toFixed(3)),fin:+fin.toFixed(3),titre:vId('titre').value.trim(),
+  coupes:coupes.filter(c=>c.on).map(c=>[c.a,c.b])});
+ if(reel&&reel.base!=null)Object.assign(d,{base:reel.base,public:reel.public});
+ vId('sortie').value=JSON.stringify(d);
+ garder()}
+vId('ajouter').onclick=()=>{points.push({t:vid.currentTime,A:{...crop.A},B:{...crop.B}});
+ sel=points.length-1;vId('maj').disabled=false;table();rail()};
+vId('maj').onclick=()=>{if(sel<0)return;points[sel].A={...crop.A};points[sel].B={...crop.B};table();rail()};
+vId('prec').onclick=()=>{const T=vid.currentTime;const p=[...points].sort((a,b)=>a.t-b.t).filter(x=>x.t<T-.2);
+ if(p.length)aller(points.indexOf(p[p.length-1]))};
+vId('suiv').onclick=()=>{const T=vid.currentTime;const p=[...points].sort((a,b)=>a.t-b.t).find(x=>x.t>T+.2);
+ if(p)aller(points.indexOf(p))};
+vId('envoyer').onclick=async()=>{
+ const b=vId('envoyer'), e=vId('etat');
+ poserCadreSiVide();
+ b.textContent='Envoi...';
+ try{const r=await fetch('/enregistrer',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:vId('sortie').value});
+  const j=await r.json();
+  b.textContent='Enregistre';
+  e.innerHTML=`Recu dans <b style="color:#4ef">cadrages/${j.fichier}</b>. Dis-le dans le chat.`;
+  setTimeout(()=>b.textContent='Enregistrer le cadrage',2500);
+ }catch(err){b.textContent='Enregistrer le cadrage';e.textContent='Echec, utilise le bouton copier.'}};
+vId('copier').onclick=()=>{const t=vId('sortie');t.select();document.execCommand('copy');
+ const b=vId('copier');b.textContent='Copie';setTimeout(()=>b.textContent='Copier le JSON',1200)};
+vId('charger').onclick=()=>{const j=prompt('Colle le JSON');if(!j)return;
+ try{const d=JSON.parse(j);points=d.points.map(p=>({t:p.t,glisse:!!p.glisse,A:p.camera,B:p.ecran}));
+  if(d.format)document.querySelector(`#fmt button[data-f="${d.format}"]`).click();
+  sel=-1;table();rail()}catch(e){alert('JSON invalide')}};
+// une camera : le plan entier, en horizontal comme en vertical
+function cadreDefaut(){return {x:0,y:0,w:SRC_W,h:SRC_H}}
+function choisirFormat(f){const b=document.querySelector(`#fmt button[data-f="${f}"]`);if(b)b.click()}
+vId('fmt').addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')return;
+ [...e.currentTarget.children].forEach(b=>b.classList.remove('on'));e.target.classList.add('on');
+ if(reel&&LOT.cadres)vus[fmt]={...crop.B};
+ fmt=e.target.dataset.f;vId('infoFmt').textContent=FORMATS[fmt].nom;
+ // chaque format garde son propre cadre du bas, propose puis ajuste
+ if(reel&&LOT.cadres){const p=points.filter(dansPassage);crop.B=p.length?{...p[0].B}:{...(vus[fmt]||LOT.cadres[fmt]||crop.B)}}
+ if(reel&&!reel.ecran){const p=points.filter(dansPassage);crop.A=p.length?{...p[0].A}:cadreDefaut()}
+ boites();
+ if(reel){sel=-1;vId('maj').disabled=true;table();rail()}});
+vId('infoFmt').textContent=FORMATS[fmt].nom;
+const selP=vId('passage');
+PASSAGES.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent=p[0];selP.appendChild(o)});
+selP.onchange=()=>{
+ if(REELS)return chargerReel(selP.value);
+ if(selP.value===''){borneA=0;borneB=DUREE}
+ else{const p=PASSAGES[+selP.value];borneA=p[1];borneB=p[2]}
+ place(borneA);sel=-1;vId('maj').disabled=true;table();rail();maj()};
+function reflets(){
+ for(const [c,ctx2,dec] of [[mirA,mcA,0],[mirB,mcB,DEMI]]){
+  if(c.width!==DEMI){c.width=DEMI;c.height=360}
+  try{ctx2.drawImage(vid,dec,0,DEMI,360,0,0,DEMI,360)}catch(e){}}
+ if(!reflets.fait){reflets.fait=true;boites()}
+ // suivi automatique : le cadre du haut suit la trajectoire calculee pour le rendu
+ if(suivi&&(vid.currentTime!==reflets.t||fmt!==reflets.f)){reflets.t=vid.currentTime;reflets.f=fmt;const s=suiviA(vid.currentTime);if(s){crop.A=s;boites()}}
+ requestAnimationFrame(reflets)}
+let boucles=false;
+vid.addEventListener('loadeddata',()=>{
+ vId('wA').style.width=vId('wB').style.width='100%';
+ if(reel)place(debuts[0]||0);
+ boites();table();rail();if(reel){mini();chips()}
+ if(!boucles){boucles=true;apercu();reflets()}});
+addEventListener('resize',()=>{boites();if(reel)mini()});
+
+// ---- Reels : une prise = un proxy, plusieurs debuts, coupes proposees ----
+// reels/reels.json liste les prises (scripts/preparer-reels.py). Chaque prise a
+// son fichier reels/<id>.json : mots (whisper), blancs (niveau sonore) et
+// coupes proposees. L'etat de chaque prise est garde dans le navigateur.
+let REELS=null,LOT={},reel=null,mots=[],blancs=[],coupes=[],debuts=[],fin=0,etats={},chargement=false,coupeEnCours=null,visage=null,suivi=null,vus={};
+// lot affiche : ?lot=... dans l'adresse, sinon le dernier choisi.
+// Chaque lot garde son propre etat ; celui des reels Matin reste sous l'ancienne cle.
+let LOTP=new URLSearchParams(location.search).get('lot');
+try{LOTP=LOTP||localStorage.getItem('recadrage-lot')}catch(e){}
+LOTP=LOTP||'exemple';
+try{localStorage.setItem('recadrage-lot',LOTP)}catch(e){}
+vId('lotSel').value=LOTP;
+vId('lotSel').onchange=e=>{location.search='?lot='+e.target.value};
+const CLE='recadrage-reels-v1'+(LOTP!=='reels'?'-'+LOTP:'');
+// centre du cadre suivi a l'instant t (pixels source), largeur donnee par le format
+function suiviA(t){
+ if(!suivi||!suivi.length)return null;
+ let cx=suivi[suivi.length-1][1];
+ if(t<=suivi[0][0])cx=suivi[0][1];
+ else for(let i=0;i<suivi.length-1;i++){if(t<suivi[i+1][0]){
+  const f=(t-suivi[i][0])/(suivi[i+1][0]-suivi[i][0]);cx=suivi[i][1]+(suivi[i+1][1]-suivi[i][1])*f;break}}
+ const z=FORMATS[fmt].a;let h=SRC_H,w=Math.round(h*z.w/z.h);if(w>SRC_W){w=SRC_W;h=Math.round(w*z.h/z.w)}
+ return {x:Math.max(0,Math.min(SRC_W-w,Math.round(cx-w/2))),y:0,w,h}}
+try{etats=JSON.parse(localStorage.getItem(CLE)||'{}')}catch(e){etats={}}
+// sans point pose, le cadre affiche vaut cadrage pour toute la video : c'est ce
+// que l'on voit a l'ecran, l'envoyer vide obligeait a deviner le cadrage
+function poserCadreSiVide(){
+ if(!points.filter(dansPassage).length){points.push({t:0,A:{...crop.A},B:{...crop.B}});table();rail()}
+ sortie()}
+function hms(t){const m=Math.floor(t/60);return m+':'+(t-60*m).toFixed(1).padStart(4,'0')}
+function garder(){
+ if(!reel||chargement)return;
+ etats[reel.id]={points,debuts,fin,titre:vId('titre').value,retourne:!!reel.retourner_ecran,cadre:{A:crop.A,B:crop.B},
+  coupesGardees:coupes.filter(c=>!c.on&&c.type!=='manuel').map(c=>c.a.toFixed(2)),
+  manuelles:coupes.filter(c=>c.type==='manuel')};
+ try{localStorage.setItem(CLE,JSON.stringify(etats))}catch(e){}}
+function premiereParole(){
+ const b=blancs.find(b=>b[0]<0.05);
+ return Math.max(0,(b?b[1]:(mots[0]?mots[0][0]:0))-0.06)}
+// colle un debut juste avant la reprise de parole la plus proche
+function caler(t){
+ let best=t,ecart=0.4;
+ for(const [,b] of blancs){const d=Math.abs(t-b);if(d<ecart){ecart=d;best=Math.max(0,b-0.06)}}
+ return best}
+// duree du fichier exporte : les coupes se chevauchent (une reprise contient
+// souvent des blancs), on retire donc leur union et non leur somme
+function dureeFinale(t){
+ let d=fin-t,bout=t;
+ for(const c of coupes.filter(c=>c.on).sort((x,y)=>x.a-y.a)){
+  const a=Math.max(c.a,bout),b=Math.min(c.b,fin);if(b>a){d-=b-a;bout=b}}
+ return Math.max(0,d)}
+function fenetre(){return Math.min(DUREE,Math.max(20,...debuts.map(t=>t+8)))}
+async function chargerReel(id){
+ garder();chargement=true;
+ reel=REELS.find(r=>r.id===id);selP.value=id;
+ const d=await fetch(reel.donnees+'?'+Date.now()).then(r=>r.json()).catch(()=>({}));
+ const e=etats[reel.id]||{};
+ mots=d.mots||[];blancs=d.blancs||[];visage=d.visage||null;suivi=d.suivi||null;vus={};
+ if(!reel.ecran&&!FORMATS[fmt].a||!reel.ecran&&FORMATS[fmt].b)choisirFormat('hsolo');
+ const gardees=new Set(e.coupesGardees||[]);
+ coupes=(d.coupes||[]).map(c=>({...c,on:(c.on!==false)&&!gardees.has(c.a.toFixed(2))}))
+  .concat((e.manuelles||[]).map(c=>({...c})));
+ coupeEnCours=null;vId('couperIci').textContent='Couper ici';
+ points=(e.points||[]).map(p=>({...p,B:{...p.B}}));
+ // proxy retourne depuis la derniere session : les cadrages ecran deja poses
+ // suivent l'image, sinon ils viseraient le coin oppose de la tablette
+ if(!!e.retourne!==!!reel.retourner_ecran)
+  for(const p of points){p.B.x=SRC_W-p.B.x-p.B.w;p.B.y=SRC_H-p.B.y-p.B.h}
+ debuts=e.debuts&&e.debuts.length?e.debuts:(d.debuts&&d.debuts.length?[...d.debuts]:[premiereParole()]);
+ fin=e.fin!=null?e.fin:(d.fin!=null?d.fin:reel.duree);
+ vId('titre').value=e.titre||d.titre||'';
+ DUREE=reel.duree;borneA=0;borneB=reel.duree;sel=-1;vId('maj').disabled=true;
+ const duMien=points.filter(dansPassage);
+ if(duMien.length){crop.A={...duMien[0].A};crop.B={...duMien[0].B}}
+ else if(!reel.ecran){crop.A=cadreDefaut()}
+ else if(e.cadre){crop.A={...e.cadre.A};crop.B={...e.cadre.B};
+  if(!!e.retourne!==!!reel.retourner_ecran){crop.B.x=SRC_W-crop.B.x-crop.B.w;crop.B.y=SRC_H-crop.B.y-crop.B.h}}
+ if(LOT.cadres&&!duMien.length&&LOT.cadres[fmt])crop.B={...LOT.cadres[fmt]};
+ chargement=false;boites();
+ vid.src=reel.proxy;vid.load();
+ table();rail();mini();chips();maj()}
+function maj2(){mini();chips();rail();sortie()}
+function railReel(r){
+ [...coupes].sort((x,y)=>(x.type==='blanc'?0:1)-(y.type==='blanc'?0:1)).forEach(c=>{const z=document.createElement('div');z.className='cut'+(c.on?'':' off');
+  z.style.left=(c.a/DUREE*100)+'%';z.style.width=Math.max(.12,(c.b-c.a)/DUREE*100)+'%';
+  z.title=`${{reprise:'Reprise',manuel:'Coupe manuelle'}[c.type]||'Blanc'} de ${(c.b-c.a).toFixed(2)} s`+
+   (c.texte?` : ${c.texte}`:'')+(c.on?' (coupe)':' (garde)')+'. Clic pour inverser.';
+  z.addEventListener('pointerdown',ev=>{ev.stopPropagation();c.on=!c.on;maj2()});r.appendChild(z)});
+ debuts.forEach((t,i)=>{const k=document.createElement('div');k.className='deb';
+  k.style.left=(t/DUREE*100)+'%';k.style.pointerEvents='none';k.innerHTML=`<span>D${i+1}</span>`;r.appendChild(k)});
+ const f=document.createElement('div');f.className='fin';f.style.left=(fin/DUREE*100)+'%';r.appendChild(f)}
+function mini(){
+ const m=vId('mini');[...m.querySelectorAll('.mot,.blanc,.deb')].forEach(n=>n.remove());
+ const W=fenetre(),px=m.clientWidth;let libre=0;
+ for(const c of coupes){if(c.a>W)continue;const z=document.createElement('div');z.className='blanc'+(c.on?'':' off');
+  z.style.left=(c.a/W*100)+'%';z.style.width=((Math.min(c.b,W)-c.a)/W*100)+'%';m.appendChild(z)}
+ for(const [a,,txt] of mots){if(a>W)break;const x=a/W*px;if(x<libre)continue;
+  const s=document.createElement('div');s.className='mot';s.style.left=x+'px';s.textContent=txt;m.appendChild(s);
+  libre=x+s.offsetWidth+4}
+ debuts.forEach((t,i)=>{const k=document.createElement('div');k.className='deb';
+  k.style.left=(t/W*100)+'%';k.innerHTML=`<span>D${i+1}</span>`;
+  k.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();
+   const r=m.getBoundingClientRect();
+   const bouge=ev=>{debuts[i]=Math.max(0,Math.min(W,(ev.clientX-r.left)/r.width*W));
+    k.style.left=(debuts[i]/W*100)+'%';place(debuts[i])};
+   const lache=()=>{removeEventListener('pointermove',bouge);removeEventListener('pointerup',lache);
+    debuts[i]=caler(debuts[i]);place(debuts[i]);maj2()};
+   addEventListener('pointermove',bouge);addEventListener('pointerup',lache)});
+  m.appendChild(k)});
+ maj()}
+vId('mini').addEventListener('pointerdown',e=>{
+ const r=e.currentTarget.getBoundingClientRect();place((e.clientX-r.left)/r.width*fenetre())});
+function chips(){
+ const c=vId('debuts');c.textContent='';
+ const t0=document.createElement('span');t0.textContent='Debuts :';c.appendChild(t0);
+ debuts.forEach((t,i)=>{const d=document.createElement('div');d.className='chip';
+  const lib=document.createElement('span');lib.textContent=`D${i+1} ${hms(t)} `;
+  const txt=document.createElement('i');txt.textContent=`→ ${hms(dureeFinale(t))}`;
+  const ecoute=document.createElement('button');ecoute.textContent='▶';ecoute.title='Ecouter depuis ce debut';
+  ecoute.onclick=()=>{place(t);if(!joue)vId('play').click()};
+  const retire=document.createElement('button');retire.className='x';retire.textContent='✕';retire.title='Retirer ce debut';
+  retire.onclick=()=>{if(debuts.length>1){debuts.splice(i,1);maj2()}};
+  d.append(lib,txt,ecoute,retire);c.appendChild(d)});
+ const f=document.createElement('span');
+ f.textContent=`Fin ${hms(fin)} · ${coupes.filter(x=>x.on).length} coupe(s) actives`;c.appendChild(f)}
+vId('debutIci').onclick=()=>{if(!reel)return;
+ debuts.push(caler(vid.currentTime));debuts.sort((a,b)=>a-b);maj2()};
+vId('finIci').onclick=()=>{if(!reel)return;fin=vid.currentTime;maj2()};
+// coupe a la main : les bords se posent dans le blanc le plus proche s'il y en a un
+vId('couperIci').onclick=()=>{if(!reel)return;
+ const t=vid.currentTime,b=vId('couperIci');
+ if(coupeEnCours===null){coupeEnCours=t;b.textContent='Fin de la coupe';return}
+ let a=Math.min(coupeEnCours,t),z=Math.max(coupeEnCours,t);coupeEnCours=null;b.textContent='Couper ici';
+ for(const [s0,s1] of blancs){if(Math.abs(a-s0)<0.3)a=s0+0.08;if(Math.abs(z-s1)<0.3)z=s1-0.08}
+ if(z-a<0.05)return;
+ coupes.push({a:+a.toFixed(3),b:+z.toFixed(3),type:'manuel',on:true,texte:'coupe ajoutee a la main'});maj2()};
+vId('titre').addEventListener('input',sortie);
+// pendant la lecture, on saute les coupes actives : on entend le montage final
+(function sauter(){
+ if(joue&&reel&&vId('sauter').checked){const t=vid.currentTime;
+  const c=coupes.find(c=>c.on&&t>=c.a&&t<c.b-0.03);if(c)vid.currentTime=c.b}
+ requestAnimationFrame(sauter)})();
+vId('exporter').onclick=async()=>{
+ const e=vId('etat');
+ poserCadreSiVide();e.textContent='Envoi de l\'export...';
+ try{const r=await fetch('/exporter',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:vId('sortie').value});
+  const j=await r.json();if(!j.ok)throw new Error(j.erreur||'refuse');
+  if(j.garde){e.innerHTML=`Enregistre dans <b style="color:#4ef">cadrages/${j.fichier}</b>, sans rendu.`;return}
+  suivre(j.nom)}catch(err){e.textContent='Export impossible : '+err.message}};
+function suivre(nom){
+ clearInterval(suivre.t);
+ suivre.t=setInterval(async()=>{try{
+  const j=await fetch('/export-etat?nom='+encodeURIComponent(nom)).then(r=>r.json());
+  vId('etat').textContent=j.texte;if(j.fini)clearInterval(suivre.t)}catch(err){}},1500)}
+fetch(LOTP+'/reels.json?'+Date.now()).then(r=>r.ok?r.json():null).then(j=>{
+ if(!j||!j.reels||!j.reels.length)return;
+ REELS=j.reels;LOT={lot:j.lot,sortie:j.sortie,cadres:j.cadres||null};document.body.classList.add('reels');selP.textContent='';
+ if(j.formats){
+  [...vId('fmt').children].forEach(b=>b.style.display=j.formats.includes(b.dataset.f)?'block':'none');
+  // libelles du mode deux cameras : inutiles sur un lot a une camera
+  if(REELS[0].ecran){const t=document.querySelectorAll('.src h2');
+   t[0].firstChild.nodeValue='Haut — suivi automatique ';t[1].firstChild.nodeValue='Bas — cadre a regler '}
+  choisirFormat(j.formats[0])}
+ if(REELS.every(r=>!r.ecran)){document.body.classList.add('solo');choisirFormat('hsolo')}
+ REELS.forEach(r=>{const o=document.createElement('option');o.value=r.id;
+  o.textContent=`${r.nom} (${hms(r.duree)})`;selP.appendChild(o)});
+ chargerReel(REELS[0].id)}).catch(()=>{});
+</script></body></html>

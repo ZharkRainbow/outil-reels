@@ -1,0 +1,45 @@
+{
+ "_lisez_moi": [
+  "Manifeste d'un lot. Un lot = un sous-dossier de lots/, contenant ce fichier,",
+  "les proxys N.mp4 et les donnees N.json produites par scripts/preparer-reels.py.",
+  "Copier ce dossier en lots/<nom du lot>/ et lancer preparer-reels.py pour le remplir.",
+  "L'outil charge le lot passe dans l'adresse : http://localhost:8765/?lot=exemple"
+ ],
+
+ "lot": "Exemple",
+ "sortie": "Mes reels",
+ "formats": ["vmc", "hsolo", "carre"],
+ "rendu": true,
+
+ "_champs": {
+  "lot": "nom affiche en haut de l'interface",
+  "sortie": "sous-dossier cree dans REELS_SORTIE pour les fichiers finis",
+  "formats": "formats proposes. vmc = vertical deux cameras, hmc = horizontal deux cameras, hsolo = horizontal une camera, carre = 1:1 une camera, v7030/v6535/v6040/h5050 = proportions a comparer",
+  "rendu": "false pour que l'outil enregistre le cadrage sans lancer le rendu",
+  "passages": "optionnel : [[titre, debut, fin], ...] pour cadrer une longue prise morceau par morceau"
+ },
+
+ "reels": [
+  {
+   "id": 1,
+   "nom": "Un titre qui dit de quoi parle la prise",
+   "camera": "/chemin/absolu/vers/Camera.mp4",
+   "ecran": "/chemin/absolu/vers/Ecran.mp4",
+   "duree": 61.4,
+   "decalage": 0.42,
+   "proxy": "1.mp4",
+   "donnees": "1.json",
+   "retourner_ecran": false,
+
+   "_champs": {
+    "camera": "le rush de la camera qui filme la personne",
+    "ecran": "le second rush : tablette, ecran, public. Absent pour un lot a une camera",
+    "duree": "duree de la prise en secondes",
+    "decalage": "decalage audio mesure entre les deux rushes, en secondes, calcule par preparer-reels.py",
+    "proxy": "video legere 1280x360 contenant les deux cameras cote a cote plus le son",
+    "donnees": "mots, blancs, coupes proposees et piste de visage",
+    "retourner_ecran": "true si le second rush est a l'envers"
+   }
+  }
+ ]
+}
