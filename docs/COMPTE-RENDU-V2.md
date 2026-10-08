@@ -225,3 +225,167 @@ sauf le bouton de validation à 36 px, aucune erreur de console.
   lesquels le manifeste les déclare. Pour les autres, le cadre de départ est
   calculé au ratio de la zone, centré. C'est utilisable, mais un lot régulier
   gagnerait à déclarer ses cadres pour chaque format qu'il utilise.
+
+## Après l'audit GPT-6
+
+Les six constats de `docs/AUDIT-V2-GPT6.md` ont été repris un par un, reproduits
+avant d'être corrigés. **Aucun ne s'est révélé faux.** Ce qui a été écarté, ce
+sont deux correctifs *proposés* par l'audit, pas les constats eux-mêmes ; c'est
+dit plus bas, avec la raison.
+
+Tout ce qui suit a été rejoué dans un vrai Chrome (service `chrome-dev`, lot
+`/tmp/lot-v2`) et en production réelle par le serveur, pas seulement en test
+unitaire.
+
+### Corrigé
+
+**1 — Les nouveaux formats échouaient au rendu complet** (P1). `rendre-reel.py`
+gardait sa propre table de quatre formats ; six des dix formats proposés par la
+page sortaient en `KeyError`. Sa table a été supprimée : la géométrie, le
+dossier de rangement et les repères d'habillage viennent maintenant de
+`scripts/formats.json`, comme pour la page et le rendu brut. Le montage pose une
+zone par zone de la table — empilée, côte à côte ou seule — au lieu de choisir
+entre `vstack` et `hstack`.
+
+Deux détails qui comptent :
+
+- Le montage part d'un `pad` du premier étage, et non d'un fond `color` comme le
+  rendu brut. `overlay` prend ses horodatages de son entrée principale ; un fond
+  généré calé sur la grille aurait décalé d'une image le calcul de rang qui
+  retient les morceaux à garder.
+- **Le carré change de taille en rendu habillé** : 1080 × 1080 au lieu de
+  1080 × 1920. C'est la valeur de la table, de la page, du rendu brut et du
+  README ; c'était `rendre-reel.py` qui était seul de son avis.
+
+Preuve, en deux passes sur le lot de test `/tmp/lot-v2` :
+
+- **Rendu brut, par le serveur.** Les dix formats produits pour de vrai, trois
+  envoyés depuis la page dans un vrai Chrome, les sept autres en ligne de
+  commande. Dimensions relues à l'`ffprobe` : elles tombent exactement sur la
+  table (1080 × 1920, 1920 × 1080, 1080 × 1080 selon le format), toutes à
+  15,708 s. Une image de chacun dans `outil-reels-captures` (`10-` à `19-`).
+- **Rendu habillé, les dix formats aussi**, lancé sur les fichiers de cadrage
+  que la page a écrits (le serveur n'appelle ce moteur que sur un lot sans clé
+  `production` ; le lot de test en a une). Neuf vont jusqu'au bout — montage,
+  sous-titres, incrustation — y compris le 80/20 qui sortait en `KeyError`, et le
+  carré qui fait bien 1080 × 1080. Le dixième, l'horizontal, est monté
+  correctement (1920 × 1080, 15,72 s, 3 jointures) mais s'arrête à
+  l'incrustation : voir « reste » ci-dessous, c'est le son factice du lot de
+  test, pas la géométrie.
+
+**2 — « Supprimer les blancs » supprimait aussi une coupe manuelle** (P1). Le
+bouton ne touche plus qu'aux coupes proposées par l'analyse. Vérifié dans
+Chrome, avec un blanc et une coupe manuelle dans des états opposés :
+
+```text
+après « Tout garder »          blanc=garde  blanc=garde ... manuel=garde
+clic « Supprimer les blancs »  blanc=coupe  blanc=coupe ... manuel=garde
+```
+
+**3 — Deux formats du même reel pouvaient écraser le même cadrage** (P2). Le nom
+de travail était coupé à soixante caractères *après* qu'on y ait collé le
+format. On garde maintenant le début du libellé, qui situe le lot, **et** sa
+fin, qui porte le format, avec une empreinte courte du libellé entier pour
+séparer deux passages que la coupe confondrait. Testé sur un identifiant de
+62 caractères, les dix formats : dix fichiers distincts, le format toujours
+lisible dans le nom.
+
+Le même défaut existait de l'autre côté, et l'audit ne l'avait pas vu : le rendu
+habillé nommait son fichier d'après le reel et le titre, **sans le format**. Sept
+des dix formats se rangent dans `Vertical` ; le carré et le consulting du même
+reel tombaient donc sur le même nom, et le second effaçait le premier sans rien
+dire. Le nom porte maintenant le libellé du format, comme du côté du rendu brut
+et du serveur. Les noms des fichiers produits changent donc : `01 - Mon titre.mp4`
+devient `01 - Mon titre - vertical 50-50.mp4`.
+
+**4 — L'aperçu pouvait montrer un cadrage qui ne serait pas produit** (P2). En
+production brute, le moteur n'applique que le premier point : l'aperçu montre
+donc ce cadre-là et ne glisse plus. Un avertissement apparaît sous la liste des
+cadrages dès qu'un deuxième point est posé sur un lot en production brute, pour
+dire que les suivants ne sortiront pas.
+
+**5 — Le suivi ne distinguait pas les formats et disparaissait au
+rechargement** (P3). Le suivi distingue maintenant le couple (reel, format) :
+
+- chaque ligne de la colonne de production porte le nom du format ;
+- le menu des reels dit combien de formats sont déjà sortis, et l'infobulle
+  lesquels ;
+- le message du reel courant dépend du format affiché : « déjà sorti en
+  Vertical 50/50 — pas encore dans ce format » ;
+- l'ancien suivi par reel est converti au chargement, sous un format « inconnu »
+  (il était sorti, on ne sait plus en quoi).
+
+Les lignes tiennent dans le stockage local et les tâches inachevées sont
+réinterrogées au chargement. Côté serveur, l'issue de chaque export est
+maintenant posée à côté de son journal : `ETATS` ne vit qu'en mémoire, et après
+un redémarrage un export réussi revenait en « raté ».
+
+Vérifié dans Chrome, de bout en bout : Test 1 envoyé en 50/50 puis en 80/20 →
+deux lignes, `✓ Test 1 (0:20.0) — 2 formats`, infobulle « Déjà sorti en :
+Vertical 50/50, Vertical 80/20 », deux MP4 distincts. Après rechargement de la
+page **et** redémarrage du serveur, les deux lignes reviennent « Prêtes ».
+
+**6 — Pas de test de régression V2** (P3). Huit tests de plus, qui tiennent sur
+les constats : un fichier par format sur un identifiant trop long, un nom de
+rendu habillé différent par format, un export fini qui survit au redémarrage, un
+format inconnu refusé, la cohérence de la table, les dix formats acceptés par les
+deux moteurs, et les règles de la page rejouées hors navigateur. 17 tests, tous
+verts.
+
+Pour ce dernier point, les trois décisions qui se discutent — ce qu'est une
+coupe « proposée », quand l'aperçu doit figer son cadre, comment le suivi
+identifie un envoi — ont été sorties dans un bloc `REGLES` de `index.html` qui
+ne touche pas au DOM. Le banc d'essai extrait ce bloc du fichier et le rejoue
+avec `node`. Pas de build, pas de dépendance, et la règle testée est
+littéralement celle qui tourne dans le navigateur.
+
+**En plus de l'audit.** La vérification en vrai navigateur a sorti un bug que le
+test unitaire ne pouvait pas voir : la relecture du suivi était posée avant la
+définition de `CLE`, donc dans sa zone morte. La `ReferenceError` était avalée
+par le `try/catch` et la colonne repartait vide, sans rien dire.
+
+### Écarté, et pourquoi
+
+Aucun constat. Deux correctifs proposés, en revanche, n'ont pas été suivis à la
+lettre :
+
+- **« N'activer que les coupes de type `blanc` »** (constat 2). Le bouton touche
+  aussi aux coupes de type `reprise`. Les deux sont des propositions de
+  l'analyse, affichées de la même façon et jamais posées par Lucas ; les séparer
+  obligerait à un troisième bouton pour un geste qui n'existe pas. La ligne de
+  partage retenue est donc « proposé par la machine » contre « posé à la main »,
+  et non « blanc » contre « le reste ».
+- **« Ou limiter la sélection UI aux formats réellement pris en charge »**
+  (constat 1, deuxième branche). Écarté : le brief demandait dix formats
+  proposés, et cacher la moitié du sélecteur pour contourner un moteur en retard
+  aurait rendu le défaut invisible au lieu de le corriger. C'est la première
+  branche — faire lire la table au moteur — qui a été suivie.
+
+Une asymétrie assumée, à vétoer si elle ne convient pas : **« Tout garder »
+reste total**, coupes manuelles comprises. Les deux boutons ne sont volontairement
+pas symétriques. Celui qui retire de la matière ne doit pas surprendre ; celui
+qui en remet ne peut rien faire perdre.
+
+### Reste
+
+- **`rendre-depuis-points.py` refuse toujours les formats à une seule zone.**
+  Il lit bien la table maintenant, mais son habillage est écrit pour deux zones.
+  C'est la limite déjà signalée plus haut, inchangée.
+- **Le son du lot de test est synthétique, et ça bloque un format sur dix.**
+  Whisper n'y entend rien de réel : il rend toujours sa phrase de filigrane,
+  « Sous-titrage ST' 501 ». Le filtre à fantômes la retire — c'est son travail —
+  et il ne reste parfois plus rien. Sur le reel 1, whisper découpe en deux blocs
+  et le « 501 » survit, donc l'incrustation a de quoi travailler ; sur le reel 2,
+  tout tient dans un seul bloc, le filtre le jette entier, et le rendu s'arrête
+  sur « srt vide ». C'est le comportement voulu face à un son muet, pas un défaut
+  de format : le montage de l'horizontal, lui, sort bien en 1920 × 1080.
+  La chaîne de sous-titres reste donc à vérifier sur une vraie prise.
+- **Le trackpad n'est toujours pas prouvé.** L'audit le notait déjà : la molette
+  et le glissement à deux doigts sont vérifiés par événements synthétiques, pas
+  par un vrai trackpad.
+- **Les ✓ du menu vivent toujours dans ce navigateur.** Ils disent maintenant
+  « envoyé, dans ces formats-là », mais c'est toujours un stockage local. La
+  colonne de production, elle, interroge le serveur, et ce qu'elle affiche
+  survit désormais à un rechargement comme à un redémarrage.
+- **Le zoom ne tient toujours pas entre deux reels**, et **les cadres par défaut
+  du lot** ne couvrent que les formats déclarés par le manifeste. Inchangé.
