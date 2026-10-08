@@ -110,12 +110,26 @@ def proxy(camera, ecran, decal, retourner, dst, audio=None):
         "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", str(dst)], check=True)
 
 
+# Version de la recette de mixage. Elle entre dans la signature de
+# preparation : changer mixer_son doit refaire les .mix.wav deja sur le disque.
+RECETTE_MIX = 2
+
+
 def mixer_son(camera, ecran, decalage, dst):
-    """Deux micros sur la référence temporelle du haut, sans modifier les rushes."""
+    """Deux micros sur la référence temporelle du haut, sans modifier les rushes.
+
+    normalize=0 : amix normalise en divisant chaque entree par leur nombre,
+    ce qui coutait 6 dB a chaque micro. Dans une conversation une seule
+    personne parle a la fois, donc le mix sortait toute la prise 6 dB trop
+    bas ; le rendu brut, qui ne retouche pas le son, le gardait ainsi. Le
+    limiteur remplace cette division pour les rares passages a deux voix,
+    sans son auto-niveau, qui remonterait une prise basse a 0 dB.
+    """
     filtre = (f"atrim=start={decalage},asetpts=PTS-STARTPTS" if decalage >= 0
               else f"adelay={round(-decalage * 1000)}:all=1")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(camera), "-i", str(ecran),
-                    "-filter_complex", f"[1:a]{filtre}[b];[0:a][b]amix=inputs=2:duration=first:normalize=1[a]",
+                    "-filter_complex", f"[1:a]{filtre}[b];[0:a][b]"
+                    f"amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.89:level=disabled[a]",
                     "-map", "[a]", "-c:a", "pcm_s16le", "-ar", "48000", str(dst)], check=True)
 
 
@@ -381,7 +395,7 @@ def main():
         # Les options et le calage changent le mix, le proxy et la transcription.
         signature = [str(camera), camera.stat().st_mtime_ns,
                      str(ecran), ecran.stat().st_mtime_ns if ecran else None,
-                     r["decalage"], retourner, args.mixer_son]
+                     r["decalage"], retourner, args.mixer_son and RECETTE_MIX]
         a_change = r.get("preparation") != signature
         if a_change:
             for suffixe in ("mp4", "wav", "mots.json"):
