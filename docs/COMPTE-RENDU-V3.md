@@ -269,3 +269,166 @@ python3 outil/serveur.py           # puis http://localhost:8765/?lot=V3
 Le lot de test se refabrique avec `/tmp/lot-v3/faire-sources.py` puis
 `/tmp/lot-v3/faire-lot.py` — environ deux minutes sur cette machine. Les deux
 scripts sont volontairement hors dépôt : ils ne servent qu'à l'essai.
+
+---
+
+## Après l'audit GPT-6
+
+`docs/AUDIT-V3-GPT6.md`, 8 octobre 2026, verdict « ÉCHEC partiel », quatre
+constats. J'ai repris chacun : trois sont fondés et corrigés, un quatrième l'est
+pour deux de ses trois reproches. Les tests passent de 17 à 22.
+
+| constat | verdict | où |
+|---------|---------|----|
+| 1 — le rendu habillé ignore la LUT et la position du titre | **fondé**, corrigé | `scripts/rendre-reel.py` |
+| 2 — « Rétablir » efface une coupe manuelle | **fondé**, corrigé | `outil/index.html` |
+| 3 — la piste n'est pas exacte | **fondé à moitié**, corrigé pour ce qui l'est | `outil/index.html` |
+| 4 — une forme mal formée casse la réponse HTTP | **fondé**, corrigé | `outil/serveur.py` |
+
+### 1. Le rendu habillé ignorait l'étalonnage — fondé
+
+Le reproche est exact, et c'est le plus grave des quatre : on choisissait
+« Délog » dans la page, on validait, et selon le manifeste du lot on recevait le
+rush brut, sans un mot. Deux moteurs, deux comportements : `produire-split.py`
+posait la LUT, `rendre-reel.py` ne la lisait même pas.
+
+`monter()` construit maintenant la même chaîne que le rendu brut : la LUT de
+chaque source, **avant le `crop`**, car une LUT travaille sur l'image entière et
+la poser après le recadrage ne redonnerait pas l'image de contrôle qu'on vient
+de valider dans le menu. La profondeur de bits est sondée par source, comme
+ailleurs. Et `main()` vérifie la présence des `.cube` **avant** de lancer
+l'encodage : autant le dire tout de suite qu'au bout de dix minutes.
+
+Preuve, protocole de l'audit rejoué tel quel — `monter()` appelée sur les mêmes
+2 s du rush Log de la prise 2, une fois par choix :
+
+| choix caméra | taille | SHA-256 (16 premiers) | durée |
+|--------------|--------|-----------------------|-------|
+| Aucun        | 74 735 o | `86a23f52c45888bc` | 2,002 s |
+| Cinestyle    | 75 165 o | `afe78b471651e982` | 2,002 s |
+| Délog        | 80 195 o | `d1724f64dfbc8e23` | 2,002 s |
+
+Trois empreintes distinctes là où l'audit en trouvait une seule. L'image
+extraite à 1 s le confirme :
+
+| choix | YLOW | YAVG | YHIGH | saturation |
+|-------|-----:|-----:|------:|-----------:|
+| Aucun     | 90 | 119,2 | 123 | 1,79 |
+| Cinestyle | 71 | 109,6 | 123 | 2,15 |
+| Délog     | 73 | 113,4 | 123 | **3,88** |
+
+Le second reproche du constat — le bandeau titre posé même sur « Aucune » — est
+fondé lui aussi. `hauteur_du_titre()` tranche désormais : `aucun` ne pose rien,
+`haut` pose à 8 % du haut, `milieu` suit le repère `titre_y` de la table des
+formats. Un cadrage enregistré avant la V3 n'a pas ce champ : il garde l'ancien
+geste, le bandeau sur `titre_y`, pour ne pas changer le passé.
+
+### 2. « Rétablir » effaçait une coupe manuelle — fondé
+
+Exact également. `coupes.forEach(c=>c.on=false)` ne regardait pas qui avait posé
+quoi. On coupait un passage à la main, on cliquait « Supprimer les blancs », on
+cliquait « Rétablir » pour revenir en arrière — et le passage qu'on avait
+justement voulu retirer repartait dans le reel.
+
+Les deux gestes sont maintenant exactement l'inverse l'un de l'autre, et ne
+touchent que ce que l'analyse a proposé (`REGLES.proposee`). Le lien ne
+s'affiche que s'il a un blanc à rétablir, plus seulement une coupe quelconque.
+
+Vérifié dans Chrome, sur le lot : coupe manuelle posée en 12,16 → 13,40 et
+coupée, puis « Supprimer les blancs » → 8 coupes sur 8, `00:14.9` à l'arrivée,
+puis « Rétablir » → 1 coupe sur 8, `00:20.2`, et la seule coupe restante est la
+manuelle. Soit exactement l'état de départ.
+
+Le test `test_la_paire_est_reciproque` rejoue les deux boutons **pris tels quels
+dans la page** (extraits par regex, pas recopiés) sous `node`, dans les deux
+ordres, et vérifie l'aller-retour.
+
+### 3. La piste n'est pas exacte — fondé à moitié
+
+Trois reproches dans un seul constat. Deux sont justes :
+
+- **L'onde était trop pleine.** Mesure refaite sur la capture de l'Atelier
+  (`selection-lucas-2026-10-08.png`, rail de 51 px utiles) : les pics les plus
+  forts y montent à 71 % du rail, la médiane à 25 %. La V3 montait à 86 % avec
+  une racine en 0,75 ; sur un passage soutenu la piste devenait un bloc plein.
+  Plafond ramené à 72 %, exposant redressé à 0,85, et les barres gardent au
+  moins un pixel d'écart (`Math.min(pas-dpr, pas*0.55)`) — à 72 % du pas elles
+  se touchaient dès que la piste était dézoomée.
+- **Les hachures hors bornes criaient trop fort.** Le rendu ignore une coupe
+  entièrement hors de la zone gardée ; la hachurer à pleine force annonçait un
+  montage qui n'aurait pas lieu. Elle passe à 23 % d'opacité — la même que
+  l'onde hors bornes — reste cliquable, et son infobulle dit « hors du reel,
+  sans effet ».
+
+Le troisième est **écarté** : l'audit demande de caler la largeur et l'ancrage
+de la piste sur sa capture de référence, où le rail commence vers `x=291`. Mais
+la référence est une fenêtre d'un autre outil, à une autre largeur, et le brief
+V3 est explicite — « la piste : forme d'onde **pleine largeur** »
+(`docs/BRIEF-V3.md`). Rétrécir la piste pour imiter un décalage qui n'est qu'un
+accident de la fenêtre photographiée irait contre la demande écrite. Si Lucas
+veut vraiment le retrait latéral, c'est une ligne de CSS, mais il faut le
+demander.
+
+### 4. Une forme mal formée coupait la connexion — fondé
+
+Exact. `.items()` sur `{"etalonnages": ["x"]}` levait une `AttributeError` hors
+de tout filet : le serveur fermait la socket au lieu de répondre. Un refus doit
+être une phrase, pas un silence.
+
+La forme est vérifiée avant le contenu : `etalonnages` doit être un objet, ses
+clés `camera` ou `ecran`, ses valeurs du texte présent dans la table ; `points`
+et `debuts` doivent être des listes. Tout le reste part en 400 avec un message.
+`test_formes_malformees_refusees` envoie neuf charges tordues, dont celles de
+l'audit, et vérifie qu'une forme juste passe toujours. Rejoué aussi en vrai, au
+`curl`, contre le serveur Portly : six charges, six 400, serveur toujours
+debout.
+
+### Revérification en vrai navigateur et en production réelle
+
+- **Navigateur.** Chrome `chrome-dev`, fenêtre 1600 × 1000, outil chargé sur le
+  lot de test V3. Chaque geste du brief a été refait à la main : poignées,
+  sensibilités, paire supprimer/rétablir, menus d'étalonnage, titre, les huit
+  formats visibles sur un lot à deux caméras, `Valider et reel suivant`. Aucune
+  exception JavaScript, aucune réponse ≥ 400.
+- **Production.** Les trois reels du lot sont passés par le bouton, pour de
+  vrai : trois MP4 dans `/tmp/lot-v3/rendus`, le message « en file d'attente,
+  1 export(s) avant » observé au passage, et la ligne de journal du serveur
+  porte bien le nom de l'étalonnage appliqué par source. Le reel 2, rendu une
+  fois en `Aucun` et une fois en `Délog`, donne 12 561 451 o contre
+  17 553 436 o, et les images extraites à 6,0 s sont visiblement différentes :
+  Log plat d'un côté, Rec.709 contrasté de l'autre.
+- **Ce que la production réelle ne prouve pas.** Le lot de test a un bloc
+  `production`, donc le serveur y choisit `produire-split.py` : ces trois reels
+  valident la chaîne complète, pas le moteur habillé. Ce dernier a besoin de
+  `whisper`, absent de cette machine ; seul son `monter()` peut tourner ici, et
+  c'est lui que la table de SHA-256 ci-dessus met à l'épreuve. L'étape
+  d'incrustation du titre, elle, n'est vérifiée que par
+  `test_ou_se_pose_le_bandeau_titre`.
+- `python3 -m pytest tests/ -q` → **22 passed**.
+
+### Les captures
+
+Dix PNG en 1600 × 1000 dans `~/projets/outil-reels-captures/`, outil chargé sur
+le lot de test, hors dépôt comme tout le reste du matériel de vérification.
+
+| fichier | ce qu'il montre |
+|---------|-----------------|
+| `01-timeline-atelier` | la piste au repos : rail de 64 px, onde ambre, blancs hachurés, aucune graduation |
+| `02-poignees-debut-fin` | les deux capsules glissées, l'onde et les coupes hors bornes en retrait |
+| `03-blancs-leger-normal-serre` | les trois sensibilités côte à côte |
+| `04-supprimer-puis-retablir` | l'aller-retour, avec la coupe manuelle intacte des deux côtés |
+| `05-etalonnage-menu` | les trois choix et les deux diagnostics, sur la prise Log |
+| `06-etalonnage-avant-apres` | deux images extraites des MP4 produits, Aucun contre Délog |
+| `07-titre-propose-et-modifie` | le titre pré-rempli, puis modifié, et les trois positions |
+| `08-formats` | les huit formats proposés sur un lot à deux caméras |
+| `09-reel-suivant-valide` | le reel validé, le suivant ouvert, le compteur à jour |
+| `10-production` | le suivi de production : les trois reels « Prêt », `Validés 3/3` |
+
+Deux précisions honnêtes :
+
+- **03, 04, 06, 07 et 08 sont des planches**, composées de plusieurs captures
+  réelles (ou, pour 06, de deux images extraites des MP4) assemblées côte à
+  côte. Une seule photo ne peut pas montrer un avant et un après.
+- **Sur 05, le menu est déplié par l'attribut `size`** : Chrome ne photographie
+  pas les listes déroulantes du système, qui sont dessinées hors de la page. Les
+  trois lignes sont bien celles du vrai `<select>`.
