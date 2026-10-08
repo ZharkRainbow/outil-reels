@@ -114,6 +114,9 @@ tr[data-i]:hover td{background:rgba(245,243,241,.055)}
 td button{background:none;border:0;color:var(--tres-doux);cursor:pointer;font-size:14px}
 td button:hover{color:var(--rouge)}
 .vide{color:var(--tres-doux);font-size:11px;font-style:italic;margin:8px 0 0}
+.avert{color:var(--doux);font-size:11px;line-height:1.45;margin:8px 0 0;
+ border-left:2px solid var(--ambre);padding:4px 0 4px 8px}
+.avert b{color:var(--ambre-clair);font-weight:600}
 #recapListe{display:grid;grid-template-columns:auto 1fr;gap:0 12px;margin:7px 0 0;font-size:11.5px}
 #recapListe dt{color:var(--tres-doux);padding:5px 0;border-bottom:1px solid var(--bord)}
 #recapListe dd{margin:0;padding:5px 0;border-bottom:1px solid var(--bord);
@@ -345,6 +348,8 @@ body.reels .reel-seul[hidden]{display:none}
         <button class="aide" id="aideCadrages" aria-label="Aide sur les cadrages" title="Un cadrage tient jusqu’au point suivant. Coche « glisse » pour passer de l’un à l’autre en douceur. Clique une ligne pour la sélectionner, puis « Corriger ce point ».">?</button></h2>
       <table><tbody id="pts"></tbody></table>
       <p class="vide" id="ptsVide">Aucun point posé : le cadre affiché vaut pour toute la prise.</p>
+      <p class="avert" id="ptsIgnores" hidden>Ce lot part en production brute : seul le
+        <b>premier</b> cadrage est appliqué, à toute la vidéo. Les suivants ne sortiront pas.</p>
     </div>
 
     <div class="bloc reel-seul" id="recap" style="flex-direction:column">
@@ -387,9 +392,9 @@ body.reels .reel-seul[hidden]{display:none}
     <span style="flex:1"></span>
     <span class="reel-seul" style="display:flex;gap:6px">
       <button class="act g" id="supprimerBlancs"
-        title="Coupe tous les blancs proposés d'un coup. Réversible : « Tout garder ».">Supprimer les blancs</button>
+        title="Coupe tous les blancs proposés d'un coup. Ne touche pas aux coupes posées à la main.">Supprimer les blancs</button>
       <button class="act fantome" id="toutGarder"
-        title="Remet toutes les coupes en « gardé » : le reel repasse en continu.">Tout garder</button>
+        title="Remet toutes les coupes en « gardé », les vôtres comprises : le reel repasse en continu.">Tout garder</button>
     </span>
     <button class="act fantome" id="toutVoir" title="Afficher la prise entière">Tout voir</button>
   </div>
@@ -443,6 +448,26 @@ let fmt="vmc", points=[], sel=-1, actif='B', joue=false;
 // lot peut en fournir via son champ "passages" : [[titre, debut, fin], ...].
 const PASSAGES=[];
 let borneA=0, borneB=0;
+// ---- Règles pures ---------------------------------------------------------
+// Trois décisions qui se discutent, rejouées sans navigateur par le banc
+// d'essai (tests/test_refonte.py, test_regles_de_la_page). Rien ici ne doit
+// toucher au DOM : c'est ce qui les rend vérifiables.
+const REGLES={
+ // Une coupe proposée par l'analyse : un blanc, ou une reprise. Celle qu'on a
+ // posée soi-même porte type:'manuel' et n'appartient qu'à soi.
+ proposee:c=>c.type!=='manuel',
+ // Vrai quand le moteur appliquera UN SEUL cadre à toute la vidéo. C'est le cas
+ // de la production brute (produire-split.py ne lit que le premier point) :
+ // l'aperçu doit montrer ce cadre-là, sinon on valide un mouvement et on reçoit
+ // un plan fixe.
+ cadreFige:brut=>!!brut,
+ // ... et vrai quand il faut le dire à l'écran : des points posés que le rendu
+ // laissera de côté.
+ pointsIgnores:(brut,nb)=>!!brut&&nb>1,
+ // Le suivi distingue (reel, format) : deux formats du même reel sont deux
+ // fichiers, donc deux lignes de suivi et deux ✓ dans le menu.
+ cleEnvoi:(reel,format)=>String(reel)+'\u0000'+String(format||'vmc'),
+};
 const vid=vId('vid'),cvs=vId('apercu'),ctx=cvs.getContext('2d');
 const mirA=vId('miroirA'),mcA=mirA.getContext('2d');
 const mirB=vId('miroirB'),mcB=mirB.getContext('2d');
@@ -472,6 +497,9 @@ function boites(){for(const k of ['A','B']){clamp(k);
 function cadrageA(t){
  const p=[...points].filter(dansPassage).sort((a,b)=>a.t-b.t);
  if(!p.length)return null;
+ // en production brute, le moteur n'applique que le premier cadrage : l'aperçu
+ // montre donc exactement ce qui va sortir, et ne glisse pas
+ if(REGLES.cadreFige(LOT.brut))return p[0];
  if(t<=p[0].t)return p[0];
  if(t>=p[p.length-1].t)return p[p.length-1];
  for(let i=0;i<p.length-1;i++){if(t>=p[i].t&&t<=p[i+1].t){
@@ -636,7 +664,13 @@ vId('rail').addEventListener('pointerup',lacher);
 vId('rail').addEventListener('pointercancel',lacher);
 
 // Un clic pour couper tous les blancs, un clic pour tout remettre.
-vId('supprimerBlancs').onclick=()=>{if(!reel)return;coupes.forEach(c=>c.on=true);maj2()};
+// « Supprimer les blancs » ne touche QUE les coupes proposées par l'analyse
+// (blancs et reprises). Une coupe posée à la main puis volontairement rendue
+// repartait au rendu d'un clic sur un bouton qui ne promet que les blancs.
+// « Tout garder » va bien dans l'autre sens pour tout le monde : il ne retire
+// rien du rendu, il remet, et c'est ce que son nom annonce.
+vId('supprimerBlancs').onclick=()=>{if(!reel)return;
+ coupes.forEach(c=>{if(REGLES.proposee(c))c.on=true});maj2()};
 vId('toutGarder').onclick=()=>{if(!reel)return;coupes.forEach(c=>c.on=false);maj2()};
 
 const GLYPHE={play:'M1 1l10 6-10 6z',pause:'M1 1h3.4v12H1zm6.6 0H11v12H7.6z'};
@@ -790,6 +824,7 @@ function table(){
  const tri=[...points].filter(dansPassage).sort((a,b)=>a.t-b.t);
  vId('nbPts').textContent=tri.length?tri.length+' point(s)':'aucun';
  vId('ptsVide').hidden=tri.length>0;
+ vId('ptsIgnores').hidden=!REGLES.pointsIgnores(LOT.brut,tri.length);
  tri.forEach(p=>{const i=points.indexOf(p),tr=document.createElement('tr');
   tr.dataset.i=i;if(i===sel)tr.className='on';
   const m=Math.floor(p.t/60);
@@ -840,15 +875,22 @@ function poserEtat(texte,classe){const e=vId('etat');
 // droite. On quitte le reel aussitot valide : sans cette liste, son rendu
 // disparaissait de l'ecran pendant qu'il tournait encore.
 let envois=[];
+try{envois=JSON.parse(localStorage.getItem(CLE+'-envois')||'[]')}catch(e){envois=[]}
+// On ne garde que les cent derniers : au-delà la colonne devient un journal.
+function retenirEnvois(){try{localStorage.setItem(CLE+'-envois',
+ JSON.stringify(envois.slice(-100)))}catch(e){}}
 function listerProduction(){
  const l=vId('prod');l.textContent='';
  vId('blocProd').hidden=!envois.length;
  for(const e of [...envois].reverse()){
   const li=document.createElement('li');li.className=e.classe||'';
   const d=document.createElement('div');
-  const n=document.createElement('b');n.textContent=e.nom;
+  // le nom porte le format : deux formats du même reel sont deux fichiers,
+  // donc deux lignes, et on doit pouvoir les distinguer d'un coup d'œil
+  const n=document.createElement('b');n.textContent=e.nom+(e.format?' — '+e.format:'');
   const s=document.createElement('span');s.textContent=e.texte;
-  d.append(n,s);li.appendChild(d);l.appendChild(li)}}
+  d.append(n,s);li.appendChild(d);l.appendChild(li)}
+ retenirEnvois()}
 // une seule interrogation pour toutes les taches en cours, qui s'arrete seule
 function sonder(){
  if(sonder.t)return;
@@ -861,19 +903,24 @@ function sonder(){
     e.classe=!j.fini?(/file d/.test(j.texte)?'attente':'cours'):(j.ok?'pret':'rate');
    }catch(err){}}
   listerProduction()},1500)}
+// Un rechargement de la page ne doit pas perdre un rendu qui tourne encore :
+// les lignes sont relues du stockage, et les taches inachevees reinterrogees.
+listerProduction();sonder();
 // renvoie vrai si le serveur a pris l'envoi : c'est ce qui autorise a enchainer
 async function envoyerProduction(route){
  const b=vId('envoyer');
  poserCadreSiVide();
  // le corps est fige maintenant : on peut changer de reel sans attendre
  const corps=vId('sortie').value, quel=reel?reel.nom:'Cadrage';
- const e={nom:quel,texte:'Envoi en cours…',classe:'cours'};
+ const e={nom:quel,reel:reel?reel.id:null,fmt:fmt,
+  format:(FORMATS[fmt]||{}).nom||fmt,texte:'Envoi en cours…',classe:'cours'};
  envois.push(e);listerProduction();
  b.disabled=true;poserEtat('Envoi en cours…','cours');
  try{
   const r=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:corps});
   const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.erreur||'Envoi refusé');
-  if(reel){validations[reel.id]=true;try{localStorage.setItem(CLE+'-validations',JSON.stringify(validations))}catch(err){}marquerReels()}
+  // le couple note est celui de l'envoi, pas celui qu'on regarde a l'arrivee
+  if(e.reel!=null)noterEnvoi(e.reel,e.fmt);
   if(j.nom){e.tache=j.nom;e.texte='En file d’attente';e.classe='attente';poserEtat('Envoyé en production.','attente');sonder()}
   else{e.texte='Cadrage enregistré : '+j.fichier;e.classe='pret';e.fini=true;poserEtat('Cadrage enregistré.','pret')}
   listerProduction();b.disabled=false;return true;
@@ -916,7 +963,7 @@ function choisirFormat(f){
   if(!reel.ecran&&!p.length)crop.A=cadreDefaut();
  }
  boites();dimensionnerPanneaux();
- if(reel){sel=-1;vId('maj').disabled=true;table();rail()}}
+ if(reel){sel=-1;vId('maj').disabled=true;table();rail();majEtatSortie()}}
 vId('fmt').addEventListener('click',e=>{
  if(e.target.tagName==='BUTTON')choisirFormat(e.target.dataset.f)});
 function nommerFormat(){const f=FORMATS[fmt],e=vId('infoFmt');
@@ -1012,12 +1059,48 @@ function suiviA(t){
   const f=(t-suivi[i][0])/(suivi[i+1][0]-suivi[i][0]);cx=suivi[i][1]+(suivi[i+1][1]-suivi[i][1])*f;break}}
  const z=(FORMATS[fmt]||{zones:{a:{w:9,h:16}}}).zones.a;let h=SRC_H,w=Math.round(h*z.w/z.h);if(w>SRC_W){w=SRC_W;h=Math.round(w*z.h/z.w)}
  return {x:Math.max(0,Math.min(SRC_W-w,Math.round(cx-w/2))),y:0,w,h}}
+// Ce qui est deja sorti, par (reel, format) : deux formats du meme reel sont
+// deux fichiers, donc deux envois. Marquer le reel entier au premier envoi
+// faisait passer pour fini un reel dont il restait neuf formats a sortir.
 let validations={};
 try{validations=JSON.parse(localStorage.getItem(CLE+'-validations')||'{}')}catch(e){}
+// Ancienne forme du suivi : un booleen par reel, sans le format. On garde le
+// reel pour sorti, sous le format « ? » : il l'est, on ne sait plus en quoi.
+{const vieux=validations,neuf={};let change=false;
+ for(const [c,v] of Object.entries(vieux)){
+  if(v===true&&c.indexOf('\u0000')<0){neuf[REGLES.cleEnvoi(c,'?')]=true;change=true}
+  else neuf[c]=v}
+ if(change){validations=neuf;
+  try{localStorage.setItem(CLE+'-validations',JSON.stringify(validations))}catch(e){}}}
+function nomFormat(c){return c==='?'?'format inconnu':(FORMATS[c]||{}).nom||c}
+// Les formats deja sortis pour ce reel, dans l'ordre de la table.
+function formatsSortis(id){const p=String(id)+'\u0000';
+ return Object.keys(validations).filter(c=>validations[c]&&c.startsWith(p))
+  .map(c=>c.slice(p.length))
+  .sort((a,b)=>(ORDRE_FMT||[]).indexOf(a)-(ORDRE_FMT||[]).indexOf(b))}
+function dejaSorti(id,f){return !!validations[REGLES.cleEnvoi(id,f)]}
+function noterEnvoi(id,f){validations[REGLES.cleEnvoi(id,f)]=true;
+ try{localStorage.setItem(CLE+'-validations',JSON.stringify(validations))}catch(e){}
+ marquerReels()}
 function marquerReels(){if(!REELS)return;
- REELS.forEach((r,i)=>{selP.options[i].textContent=`${validations[r.id]?'✓':'○'} ${r.nom} (${hms(r.duree)})`});
- const faits=REELS.filter(r=>validations[r.id]).length;
+ REELS.forEach((r,i)=>{const s=formatsSortis(r.id),o=selP.options[i];
+  // le compte des formats est dans le menu, leurs noms dans l'infobulle
+  o.textContent=`${s.length?'✓':'○'} ${r.nom} (${hms(r.duree)})`
+   +(s.length>1?` — ${s.length} formats`:'');
+  o.title=s.length?'Déjà sorti en : '+s.map(nomFormat).join(', '):''});
+ const faits=REELS.filter(r=>formatsSortis(r.id).length).length;
  vId('avancement').innerHTML=`Validés <b>${faits} / ${REELS.length}</b>`;}
+// Le message du reel courant depend du format affiche : le meme reel peut etre
+// sorti en vertical et rester a faire en horizontal.
+function majEtatSortie(){
+ if(!reel)return;
+ if(dejaSorti(reel.id,fmt))
+  return poserEtat('Ce reel est déjà sorti dans ce format depuis ce navigateur.','pret');
+ const s=formatsSortis(reel.id);
+ if(s.length)
+  return poserEtat('Déjà sorti en '+s.map(nomFormat).join(', ')
+   +' — pas encore dans ce format.','');
+ poserEtat('Prêt à envoyer.','')}
 try{etats=JSON.parse(localStorage.getItem(CLE)||'{}')}catch(e){etats={}}
 // sans point pose, le cadre affiche vaut cadrage pour toute la video : c'est ce
 // que l'on voit a l'ecran, l'envoyer vide obligeait a deviner le cadrage
@@ -1077,8 +1160,7 @@ async function chargerReel(id){
  if(LOT.cadres&&!duMien.length&&!e.cadre&&LOT.cadres[fmt])crop.B={...LOT.cadres[fmt]};
  if(LOT.cadres&&!duMien.length&&!e.cadre&&LOT.cadres[fmt+'_haut'])crop.A={...LOT.cadres[fmt+'_haut']};
  chargement=false;boites();
- poserEtat(validations[reel.id]?'Ce reel a déjà été envoyé en production depuis ce navigateur.':'Prêt à envoyer.',
-  validations[reel.id]?'pret':'');
+ majEtatSortie();
  vid.src=reel.proxy;vid.load();
  forme=d.forme||null;toutVoir();table();chips();
  const dernier=selP.selectedIndex===selP.options.length-1;
@@ -1138,7 +1220,7 @@ fetch('/lots/'+encodeURIComponent(LOTP)+'/reels.json?'+Date.now()).then(r=>r.ok?
  if(!j||!j.reels||!j.reels.length)throw new Error('Lot absent ou vide');
  const base=new URL('/lots/'+encodeURIComponent(LOTP)+'/',location.href);
  const resoudre=p=>new URL(LOTP==='reels'?p.replace(/^reels\//,''):p,base).href;
- REELS=j.reels.map(r=>({...r,proxy:resoudre(r.proxy),donnees:resoudre(r.donnees)}));LOT={lot:j.lot,sortie:j.sortie,rendu:j.rendu,suivi:j.suivi===true,cadres:j.cadres||null};document.body.classList.add('reels');selP.textContent='';
+ REELS=j.reels.map(r=>({...r,proxy:resoudre(r.proxy),donnees:resoudre(r.donnees)}));LOT={lot:j.lot,sortie:j.sortie,rendu:j.rendu,suivi:j.suivi===true,cadres:j.cadres||null,brut:!!j.production};document.body.classList.add('reels');selP.textContent='';
  if(vId('lotSel').selectedOptions[0])vId('lotSel').selectedOptions[0].textContent=j.lot||LOTP;
  if(REELS.every(r=>!r.ecran))document.body.classList.add('solo');
  else{// libelles du mode deux cameras : inutiles sur un lot a une camera
