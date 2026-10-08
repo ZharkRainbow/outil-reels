@@ -11,6 +11,7 @@ reste figee sur les premieres frames.
 C'etait la cause reelle des "bugs de synchronisation" de l'outil. On implemente
 donc Range ici.
 """
+import hashlib
 import json
 import os
 import queue
@@ -54,9 +55,41 @@ def ouvrier():
             print(f"[{datetime.now():%H:%M:%S}] export impossible : {nom} : {exc}", flush=True)
         finally:
             ETATS[nom] = code
+            # ETATS vit en memoire : apres un redemarrage, un export reussi
+            # repassait pour un echec dans la colonne de suivi de la page.
+            # L'issue est donc aussi posee a cote du journal.
+            try:
+                (DEPOT / f"{nom}.etat").write_text(str(code), encoding="utf-8")
+            except OSError:
+                pass
             FILE.task_done()
         print(f"[{datetime.now():%H:%M:%S}] export {'ok' if code == 0 else 'ECHEC'} : {nom}",
               flush=True)
+
+
+def nom_interne(passage):
+    """Nom de travail d'un export : court, sans separateur de chemin, et unique.
+
+    La coupe a soixante caracteres se faisait APRES avoir collé le format. Sur un
+    identifiant de reel un peu long, « ... - vertical 50-50 » et « ... - horizontal »
+    tombaient donc sur le meme nom : meme fichier de cadrage, meme journal, et le
+    second export refuse comme « deja dans la file ». On garde maintenant le debut
+    du libelle (il situe le lot) ET sa fin (elle porte le format), et on ajoute une
+    empreinte du libelle entier, qui separe deux passages que la coupe confondrait.
+    """
+    propre = re.sub(r'[\\/:\x00-\x1f]', '-', str(passage or "sans-passage"))
+    if len(propre) <= 60:
+        return propre
+    empreinte = hashlib.sha1(propre.encode("utf-8")).hexdigest()[:8]
+    return f"{propre[:28]}--{propre[-20:]} {empreinte}"
+
+
+def issue_sur_disque(nom):
+    """Code de sortie d'un export termine avant le redemarrage, ou None."""
+    try:
+        return int((DEPOT / f"{nom}.etat").read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
 
 
 def lancer_export(nom, fichier):
@@ -194,8 +227,7 @@ class H(SimpleHTTPRequestHandler):
             except ValueError:
                 return self.send_error(400, "Format inconnu")
             d["passage"] = f"{d.get('lot_id') or d.get('lot') or 'Reel'} {d['reel']} - {format_}"
-        nom = str(d.get("passage") or "sans-passage").replace("/", "-")[:60]
-        nom = re.sub(r'[\\/:\x00-\x1f]', '-', nom)
+        nom = nom_interne(d.get("passage"))
         if ETATS.get(nom) in ("attente", "cours"):
             return self.repondre({"ok": False, "erreur": "cet export est déjà dans la file"}, 409)
         f = DEPOT / f"{nom}.json"
@@ -212,6 +244,7 @@ class H(SimpleHTTPRequestHandler):
 
         ETATS[nom] = "attente"
         (DEPOT / f"{nom}.log").write_text("", encoding="utf-8")
+        (DEPOT / f"{nom}.etat").unlink(missing_ok=True)   # l'issue precedente ne vaut plus
         FILE.put((nom, f))
         print(f"[{datetime.now():%H:%M:%S}] export en file : {nom}", flush=True)
         self.repondre({"ok": True, "nom": nom, "fichier": f"{nom}.json (export en file)"})
@@ -243,6 +276,8 @@ class H(SimpleHTTPRequestHandler):
         if not nom or "/" in nom or "\\" in nom:
             return self.send_error(400)
         etat, journal = ETATS.get(nom), DEPOT / f"{nom}.log"
+        if etat is None:
+            etat = issue_sur_disque(nom)      # export d'avant le redemarrage
         if etat == "attente":
             devant = [n for n, _ in list(FILE.queue)].index(nom) if nom in [n for n, _ in list(FILE.queue)] else 0
             en_cours = sum(1 for e in ETATS.values() if e == "cours")
