@@ -340,5 +340,75 @@ class NomsDuRendu(unittest.TestCase):
                         rendre.main()
 
 
+class MoteurHabille(unittest.TestCase):
+    """Audit GPT-6, constat 1 : ce moteur-la ignorait l'etalonnage et la position
+    du titre. Il rendait le meme fichier au bit pres avec « Aucun » et avec
+    « Delog », et posait un bandeau meme quand la page disait « Aucune »."""
+
+    def setUp(self):
+        """Les .cube ne sont pas dans le depot : on en pose des faux, nommes
+        d'apres la table elle-meme, pour que le test ne depende pas du disque."""
+        etalonnage = importlib.import_module('etalonnage')
+        self.tmp = tempfile.TemporaryDirectory()
+        for e in etalonnage.ETALONNAGES.values():
+            if e['fichier']:
+                (Path(self.tmp.name) / e['fichier']).write_text('LUT_3D_SIZE 2\n')
+        self.modif = patch.object(etalonnage.reglages, 'LUTS', self.tmp.name)
+        self.modif.start()
+
+    def tearDown(self):
+        self.modif.stop()
+        self.tmp.cleanup()
+
+    def chaine(self, **extra):
+        """La chaine de filtres que monter() aurait passee a ffmpeg."""
+        rendre = importlib.import_module('rendre-reel')
+        d = {'reel': 'P1-03', 'format': 'vmc', 'camera': 'haut.mp4', 'ecran': 'bas.mp4',
+             'debuts': [0], 'fin': 4.0, 'coupes': [], 'decalage': 0.0,
+             'source': {'w': 1920, 'h': 1080},
+             # les proportions de la zone du vertical 50/50 : 1080x960
+             'points': [{'t': 0, 'camera': {'x': 0, 'y': 0, 'w': 1080, 'h': 960},
+                         'ecran': {'x': 0, 'y': 120, 'w': 1080, 'h': 960}}]}
+        d.update(extra)
+        vues = {}
+
+        def faux_run(cmd, **kw):
+            vues['chaine'] = cmd[cmd.index('-filter_complex') + 1]
+            return subprocess.CompletedProcess(cmd, 0, '', '')
+
+        with patch.object(rendre.subprocess, 'run', faux_run), \
+             patch.object(rendre, 'taille_source', lambda *a: (1920, 1080)), \
+             patch.object(rendre, 'sonie', lambda *a: -18.0), \
+             patch.object(rendre.etalonnage, 'profondeur_bits', lambda *a: 10):
+            rendre.monter(d, 0.0, Path('/tmp/jamais-ecrit.mp4'))
+        return vues['chaine']
+
+    def test_la_lut_est_posee_avant_le_crop(self):
+        nue = self.chaine()
+        self.assertNotIn('lut3d', nue)
+        # une LUT travaille sur l'image entiere : posee apres le crop, elle ne
+        # redonnerait pas l'image de controle qu'on a validee dans la page
+        pose = self.chaine(etalonnages={'camera': 'delog', 'ecran': 'aucun'})
+        self.assertIn('lut3d', pose)
+        self.assertLess(pose.index('lut3d'), pose.index('crop'))
+        # chaque source garde son propre choix : une seule LUT ici
+        self.assertEqual(pose.count('lut3d'), 1)
+        self.assertNotEqual(nue, pose)
+
+    def test_les_trois_choix_donnent_trois_chaines(self):
+        vues = {cle: self.chaine(etalonnages={'camera': cle, 'ecran': cle})
+                for cle in ('aucun', 'cine709', 'delog')}
+        self.assertEqual(len(set(vues.values())), 3)
+
+    def test_ou_se_pose_le_bandeau_titre(self):
+        rendre = importlib.import_module('rendre-reel')
+        hab = {'titre_y': 0.46}
+        self.assertIsNone(rendre.hauteur_du_titre('aucun', hab))
+        self.assertEqual(rendre.hauteur_du_titre('haut', hab), rendre.TITRE_HAUT)
+        self.assertEqual(rendre.hauteur_du_titre('milieu', hab), 0.46)
+        # un cadrage d'avant la V3 n'a pas ce champ : il garde l'ancien geste
+        self.assertEqual(rendre.hauteur_du_titre(None, hab), 0.46)
+
+
 if __name__ == '__main__':
     unittest.main()

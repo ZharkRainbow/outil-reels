@@ -5,10 +5,12 @@ Un fichier par debut pose dans l'outil : meme fin, memes coupes, memes
 cadrages, seul le point de depart change. Pour chaque debut :
 
 1. montage : face cam en haut, tablette en bas (1080x960 chacune), cadrages
-   de l'outil, coupes retirees, son de la face cam ramene a -14 LUFS ;
+   de l'outil, etalonnage de chaque rush (la LUT choisie dans l'outil, posee
+   avant le recadrage), coupes retirees, son ramene a -14 LUFS ;
 2. sous-titres : whisper relance sur le montage (faire-captions.py), pour
    qu'ils soient cales sur le fichier final et non sur la prise ;
-3. incrustation des sous-titres et du bandeau titre (incruster-captions.py).
+3. incrustation des sous-titres et, si la page le demande, du bandeau titre
+   (incruster-captions.py) : « position du titre » vaut haut, milieu ou aucun.
 
 Les coupes sont calees sur la grille des images (23,976 i/s, la cadence de la
 face cam) : la video retire des images entieres et le son exactement la meme
@@ -29,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 reglages = import_module("reglages")
 formats = import_module("formats")
 points = import_module("rendre-depuis-points")
+etalonnage = import_module("etalonnage")
 captions = import_module("faire-captions")
 incruster = import_module("incruster-captions")
 
@@ -47,6 +50,11 @@ IPS = 24000 / 1001
 # dit lequel alimente quelle zone, et depuis quel rush.
 ZONE = {"a": "A", "b": "B"}
 LUFS = -14.0
+# Ou le bandeau titre se pose quand la page demande « en haut » : juste sous le
+# bord superieur, la meme fraction dans les dix formats. « Au milieu », lui, suit
+# le repere titre_y de la table — sur un format empile c'est la couture des deux
+# cameras, qui n'est pas toujours la moitie exacte de la hauteur.
+TITRE_HAUT = 0.08
 FONDU = 0.005            # 5 ms a chaque jointure : pas de clic, rien d'audible
 # Vocabulaire : on passe par le dictionnaire commun, celui de
 # corriger-transcript.py, et non par une poignee de regex locales. Deux regex
@@ -215,7 +223,7 @@ def monter(d, debut, dst):
     # On ne part PAS d'un fond « color » : les horodatages du montage doivent
     # rester ceux du rush, sinon le select ci-dessus decale tout d'une image.
     def etage(nom, z):
-        """Le rush de cette zone, recadre et mis a l'echelle de la zone."""
+        """Le rush de cette zone, etalonne, recadre et mis a l'echelle."""
         k = ZONE[nom]
         w, h = points.taille(pts, k)
         x, y = (points.expression(pts, k, axe, debut) for axe in ("x", "y"))
@@ -223,6 +231,7 @@ def monter(d, debut, dst):
         devant = rotation if z["source"] == "ecran" else ""
         apres_fps = retard if z["source"] == "ecran" else ""
         return (f"[{flux[z['source']]}]{devant}fps=24000/1001{apres_fps},"
+                f"{luts[z['source']]}"
                 f"crop={w}:{h}:'{x}':'{y}':exact=1,"
                 f"scale={z['w']}:{z['h']}:flags=lanczos,setsar=1")
 
@@ -233,6 +242,23 @@ def monter(d, debut, dst):
         entrees += [*ACCEL, "-ss", f"{depart_ecran:.3f}",
                     "-t", f"{duree + 0.5:.3f}", "-i", d["ecran"]]
     flux = {"camera": "0:v:0", "ecran": "1:v:0"}
+    # L'etalonnage choisi dans l'outil, pose AVANT le crop comme dans le rendu
+    # brut : une LUT travaille sur l'image entiere, et la mettre apres le
+    # recadrage ne redonnerait pas l'image de controle qu'on a validee. Sans ce
+    # bloc, ce moteur rendait le meme fichier au bit pres avec « Aucun » et avec
+    # « Delog » — on validait un delogage et on recevait le rush brut.
+    choix = d.get("etalonnages") or {}
+    besoins = {z["source"] for _, z in zones}
+    rush = {"camera": d["camera"], "ecran": d.get("ecran") or d["camera"]}
+    luts = {}
+    for source in ("camera", "ecran"):
+        if source not in besoins:            # pas de second rush : pas de sonde
+            luts[source] = ""
+            continue
+        f_lut = etalonnage.filtre(choix.get(source, "aucun"),
+                                  etalonnage.profondeur_bits(rush[source]))
+        luts[source] = f_lut + "," if f_lut else ""
+
     (nom0, z0), autres = zones[0], zones[1:]
     fond = f"pad={f_['W']}:{f_['H']}:{z0['x']}:{z0['y']}:color={formats.fond(cle)}"
     branches, dessus = [etage(nom0, z0) + f",{fond}[mont0]"], "mont0"
@@ -356,6 +382,22 @@ JARGON |= {vocabulaire.MARQUE.lower(), vocabulaire.MARQUE_GROUPE.lower(),
 JARGON |= {v.lower() for v in vocabulaire.MOT_A_MOT.values()}
 
 
+def hauteur_du_titre(position, hab):
+    """Ou poser le bandeau titre, en fraction de la hauteur — ou None pour n'en
+    poser aucun.
+
+    La page propose « En haut », « Au milieu » et « Aucune » ; jusqu'ici ce
+    moteur incrustait un bandeau dans les trois cas. Un cadrage d'avant la V3
+    n'a pas ce champ : il garde l'ancien comportement, le bandeau sur le repere
+    titre_y de la table.
+    """
+    if position == "aucun":
+        return None
+    if position == "haut":
+        return TITRE_HAUT
+    return hab["titre_y"]
+
+
 def nom_de_sortie(d, cle):
     """Nom du fichier rendu : "07 - Prenom Mon titre - vertical 50-50.mp4".
 
@@ -380,6 +422,12 @@ def main():
         sys.exit(str(pb))
     if not d.get("points") and not formats.une_camera(format_):
         sys.exit("Aucun cadrage pose : pose au moins un cadrage avant d'exporter.")
+    for source, cle_lut in (d.get("etalonnages") or {}).items():
+        # autant le dire maintenant qu'au bout de dix minutes d'encodage
+        try:
+            etalonnage.verifier_present(cle_lut)
+        except ValueError as pb:
+            sys.exit(str(pb))
     debuts = d.get("debuts") or [0.0]
     # rangement : <sortie>/Vertical/01 - <titre>.mp4
     racine = SORTIE
@@ -422,8 +470,9 @@ def main():
                 zones.write_text(json.dumps(cote_libre(d, incruster.lire_srt(srt)),
                                             ensure_ascii=False), encoding="utf-8")
                 cmd += ["--placements", str(zones)]
-            if d.get("titre"):
-                cmd += ["--accroche", d["titre"], "--accroche-y", str(hab["titre_y"])]
+            y_titre = hauteur_du_titre(d.get("titre_position", "milieu"), hab)
+            if d.get("titre") and y_titre is not None:
+                cmd += ["--accroche", d["titre"], "--accroche-y", str(y_titre)]
             r = subprocess.run(cmd, capture_output=True, text=True)
             if r.returncode or not final.exists():
                 raise RuntimeError("incrustation : " + (r.stdout or r.stderr).strip()[-400:])
