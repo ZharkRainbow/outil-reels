@@ -300,16 +300,16 @@ body.reels .reel-seul{display:flex}
 const SRC_W=3840,SRC_H=2160;
 let DUREE=0;            // vraie duree lue dans le manifeste du lot
 const FORMATS={
- vmc:{nom:"1080x1920 — 50/50",W:1080,H:1920,a:{x:0,y:0,w:1080,h:960},b:{x:0,y:960,w:1080,h:960},fond:"#D4CCBE"},
- hmc:{nom:"1920x1080 — camera 720 a gauche",W:1920,H:1080,a:{x:0,y:0,w:720,h:1080},b:{x:720,y:0,w:1200,h:1080},fond:"#000"},
- vcons:{nom:"1080x1920 — deux etages, meme rush",W:1080,H:1920,a:{x:0,y:0,w:1080,h:960},b:{x:0,y:960,w:1080,h:960},fond:"#000"},
- hsolo:{nom:"1920x1080 — une camera, sous-titres a cote du visage",W:1920,H:1080,a:{x:0,y:0,w:1920,h:1080},b:null,fond:"#000"},
- carre:{nom:"1080x1080 — video d'origine au centre, bandes noires",W:1080,H:1080,a:{x:0,y:236,w:1080,h:608},b:null,fond:"#000"},
+ vmc:{nom:"1080 × 1920 — 50/50",W:1080,H:1920,a:{x:0,y:0,w:1080,h:960},b:{x:0,y:960,w:1080,h:960},fond:"#D4CCBE"},
+ hmc:{nom:"1920 × 1080 — caméra 720 à gauche",W:1920,H:1080,a:{x:0,y:0,w:720,h:1080},b:{x:720,y:0,w:1200,h:1080},fond:"#000"},
+ vcons:{nom:"1080 × 1920 — deux étages, même rush",W:1080,H:1920,a:{x:0,y:0,w:1080,h:960},b:{x:0,y:960,w:1080,h:960},fond:"#000"},
+ hsolo:{nom:"1920 × 1080 — une caméra, sous-titres à côté du visage",W:1920,H:1080,a:{x:0,y:0,w:1920,h:1080},b:null,fond:"#000"},
+ carre:{nom:"1080 × 1080 — vidéo d'origine au centre, bandes noires",W:1080,H:1080,a:{x:0,y:236,w:1080,h:608},b:null,fond:"#000"},
  // une camera suivie automatiquement en haut, le public en bas (proportions a comparer)
- v7030:{nom:"1080x1920 — haut 70 %, bas 30 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1344},b:{x:0,y:1344,w:1080,h:576},fond:"#000"},
- v6535:{nom:"1080x1920 — haut 65 %, bas 35 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1248},b:{x:0,y:1248,w:1080,h:672},fond:"#000"},
- v6040:{nom:"1080x1920 — haut 60 %, bas 40 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1152},b:{x:0,y:1152,w:1080,h:768},fond:"#000"},
- h5050:{nom:"1920x1080 — gauche 50 %, droite 50 %",W:1920,H:1080,a:{x:0,y:0,w:960,h:1080},b:{x:960,y:0,w:960,h:1080},fond:"#000"}};
+ v7030:{nom:"1080 × 1920 — haut 70 %, bas 30 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1344},b:{x:0,y:1344,w:1080,h:576},fond:"#000"},
+ v6535:{nom:"1080 × 1920 — haut 65 %, bas 35 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1248},b:{x:0,y:1248,w:1080,h:672},fond:"#000"},
+ v6040:{nom:"1080 × 1920 — haut 60 %, bas 40 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1152},b:{x:0,y:1152,w:1080,h:768},fond:"#000"},
+ h5050:{nom:"1920 × 1080 — gauche 50 %, droite 50 %",W:1920,H:1080,a:{x:0,y:0,w:960,h:1080},b:{x:960,y:0,w:960,h:1080},fond:"#000"}};
 let fmt="vmc", points=[], sel=-1, actif='B', joue=false;
 // Sous-selections a cadrer separement dans une longue prise. Le manifeste du
 // lot peut en fournir via son champ "passages" : [[titre, debut, fin], ...].
@@ -407,7 +407,7 @@ vId('rail').addEventListener('pointerdown',e=>{
  const r=e.currentTarget.getBoundingClientRect();place(borneA+(e.clientX-r.left)/r.width*(borneB-borneA))});
 vId('play').onclick=e=>{joue=!joue;
  if(joue){vid.play().catch(()=>{joue=false;e.target.textContent='Lecture';
-   vId('etat').textContent='Lecture refusee par le navigateur, reclique.'});
+   vId('etat').textContent='Lecture refusée par le navigateur, reclique.'});
   e.target.textContent='Pause'}
  else{vid.pause();e.target.textContent='Lecture'}};
 vid.addEventListener('pause',()=>{joue=false;vId('play').textContent='Lecture'});
@@ -659,7 +659,7 @@ function railReel(r){
    (c.texte?` : ${c.texte}`:'')+(c.on?' (coupe)':' (garde)')+'. Clic pour inverser.';
   z.addEventListener('pointerdown',ev=>{ev.stopPropagation();c.on=!c.on;maj2()});r.appendChild(z)});
  const f=document.createElement('div');f.className='fin';f.style.left=(fin/DUREE*100)+'%';
- f.innerHTML=`<span>fin ${hms(fin)}</span>`;f.title=`Fin du reel a ${hms(fin)}`;r.appendChild(f)}
+ f.innerHTML=`<span>fin ${hms(fin)}</span>`;f.title=`Fin du reel à ${hms(fin)}`;r.appendChild(f)}
 function motsEtDebuts(){
  const m=vId('rail');[...m.querySelectorAll('.mot,.grad,.deb')].forEach(n=>n.remove());
  const W=DUREE,px=m.clientWidth;let libre=0;
@@ -685,13 +685,13 @@ vId('zoom').oninput=()=>{vId('rail').style.width=(100*Number(vId('zoom').value))
 function chips(){
  vId('exporter').hidden=debuts.length<2;
  const c=vId('debuts');c.textContent='';
- const t0=document.createElement('span');t0.textContent='Debuts :';c.appendChild(t0);
+ const t0=document.createElement('span');t0.textContent='Départs :';c.appendChild(t0);
  debuts.forEach((t,i)=>{const d=document.createElement('div');d.className='chip';
   const lib=document.createElement('span');lib.textContent=`D${i+1} ${hms(t)} `;
   const txt=document.createElement('i');txt.textContent=`→ ${hms(dureeFinale(t))}`;
-  const ecoute=document.createElement('button');ecoute.textContent='▶';ecoute.title='Ecouter depuis ce debut';
+  const ecoute=document.createElement('button');ecoute.textContent='▶';ecoute.title='Écouter depuis ce début';
   ecoute.onclick=()=>{place(t);if(!joue)vId('play').click()};
-  const retire=document.createElement('button');retire.className='x';retire.textContent='✕';retire.title='Retirer ce debut';
+  const retire=document.createElement('button');retire.className='x';retire.textContent='✕';retire.title='Retirer ce début';
   retire.onclick=()=>{if(debuts.length>1){debuts.splice(i,1);maj2()}};
   d.append(lib,txt,ecoute,retire);c.appendChild(d)});
  const f=document.createElement('span');
@@ -720,7 +720,7 @@ vId('couperIci').onclick=()=>{if(!reel)return;
  let a=Math.min(coupeEnCours,t),z=Math.max(coupeEnCours,t);coupeEnCours=null;b.textContent='Couper ici';
  for(const [s0,s1] of blancs){if(Math.abs(a-s0)<0.3)a=s0+0.08;if(Math.abs(z-s1)<0.3)z=s1-0.08}
  if(z-a<0.05)return;
- coupes.push({a:+a.toFixed(3),b:+z.toFixed(3),type:'manuel',on:true,texte:'coupe ajoutee a la main'});maj2()};
+ coupes.push({a:+a.toFixed(3),b:+z.toFixed(3),type:'manuel',on:true,texte:'coupe ajoutée à la main'});maj2()};
 vId('titre').addEventListener('input',sortie);
 // pendant la lecture, on saute les coupes actives : on entend le montage final
 (function sauter(){
