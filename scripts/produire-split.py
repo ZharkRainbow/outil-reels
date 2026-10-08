@@ -33,6 +33,24 @@ def flux_video(chemin):
     return int(flux["width"]), int(num) / int(den or 1), flux["r_frame_rate"]
 
 
+def verifier(d):
+    """Ce script ne sait faire qu'une chose : deux cameras empilees, un cadre
+    fixe. Mieux vaut le dire que de sortir un reel qui n'est pas le bon, ou un
+    traceback Python, puisque l'outil n'affiche que la derniere ligne du journal."""
+    if d.get("format", "vmc") != "vmc":
+        raise ValueError(f"Le rendu brut ne fait que le vertical deux caméras, "
+                         f"pas le format « {d.get('format')} »")
+    if not d.get("ecran"):
+        raise ValueError("Le rendu brut assemble deux caméras : ce reel n'en déclare qu'une")
+    if not d.get("points"):
+        raise ValueError("Aucun cadrage posé : pose un cadrage avant d'envoyer en production")
+    if not d.get("debuts") or d.get("fin") is None:
+        raise ValueError("Ce cadrage n'a pas de début ou pas de fin : rien à monter")
+    if len(d["points"]) > 1:
+        print(f"{len(d['points'])} cadrages posés, le rendu brut ne garde que le premier "
+              f"(cadre fixe)", flush=True)
+
+
 def rendre(d, sortie):
     cam, ecran = RACINE / d["camera"], RACINE / d["ecran"]
     large_cam, ips, cadence = flux_video(cam)
@@ -59,6 +77,9 @@ def rendre(d, sortie):
     if not gardes:
         raise ValueError("Le montage est vide : vérifier début, fin et coupes")
 
+    # Les cadres arrivent dans le repere de l'outil (d["source"]) : on les
+    # ramene a l'echelle de chaque source. Le facteur est pris sur la largeur,
+    # ce qui suppose des rushes 16:9 comme le proxy.
     p = d["points"][0]
     k = large_cam / d["source"]["w"]
     h = {z: round(p["camera"][z] * k) for z in ("x", "y", "w", "h")}
@@ -88,6 +109,8 @@ def rendre(d, sortie):
     print(f"{len(gardes)} morceau(x), {sum(f - s for s, f in gardes):.1f} s -> {nom}", flush=True)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(cam), "-i", str(ecran),
                     *(["-i", d["audio"]] if d.get("audio") else []),
+                    # un seul thread de filtrage : sur deux coeurs, en paralleliser
+                    # davantage ne gagne rien et prive l'encodeur de la machine
                     "-filter_complex_threads", "1", "-filter_complex", filtre, "-map", "[v]", "-map", "[a]",
                     "-c:v", "h264_videotoolbox" if platform.system() == "Darwin" else "libx264", "-b:v", "12M", "-c:a", "aac", "-b:a", "192k",
                     "-movflags", "+faststart", str(sortie / nom)], check=True)
@@ -107,6 +130,7 @@ def dossier_de_sortie(valeur):
 
 def main():
     d = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    verifier(d)
     sortie = dossier_de_sortie(sys.argv[2] if len(sys.argv) > 2 else None)
     debuts = d["debuts"]
     faits = []
@@ -119,4 +143,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # l'outil n'affiche que la derniere ligne du journal : une phrase, pas un
+    # traceback. Les echecs ffmpeg gardent la leur, elle sert au diagnostic.
+    try:
+        main()
+    except ValueError as pb:
+        sys.exit(str(pb))
