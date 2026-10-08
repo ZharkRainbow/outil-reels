@@ -263,6 +263,9 @@ textarea{display:none}
 .coupe i:hover{background:var(--ambre-clair)}
 .coupe i.bord-a{left:0}.coupe i.bord-b{right:0}
 .coupe.off i{display:none}
+/* une coupe entierement hors des bornes : le rendu l'ignore, la piste la
+   montre comme l'onde hors bornes — presente, lisible, sans crier */
+.coupe.hors{opacity:.23}
 /* les cadrages poses : un trait fin, et son heure dans une pastille lisible
    par-dessus l'onde */
 .mk{position:absolute;top:0;bottom:0;width:2px;background:rgba(245,243,241,.6);
@@ -449,7 +452,8 @@ body.reels .reel-seul[hidden]{display:none}
           <option value="aucun" selected>Aucune</option>
         </select>
       </div>
-      <p class="hint">Pas encore incrusté : la position est enregistrée pour plus tard.</p>
+      <p class="hint" id="hintTitre">Le rendu brut n'incruste rien : le titre ne sert
+        qu'au nom du fichier. Le rendu habillé pose le bandeau à l'endroit choisi.</p>
     </div>
 
     <div class="bloc">
@@ -502,7 +506,7 @@ body.reels .reel-seul[hidden]{display:none}
       <button class="act g" id="supprimerBlancs"
         title="Coupe tous les blancs détectés d'un coup. Ne touche pas aux coupes posées à la main.">✂ Supprimer les blancs</button>
       <button class="lien" id="toutGarder" hidden
-        title="Remet toutes les coupes en « gardé », les vôtres comprises : le reel repasse en continu.">Rétablir</button>
+        title="Remet tous les blancs détectés en « gardé ». Ne touche pas aux coupes posées à la main.">Rétablir</button>
     </span>
   </div>
   <div class="rail" id="rail"><canvas id="onde"></canvas><div class="tete" id="tete"></div></div>
@@ -814,17 +818,20 @@ const lacher=()=>{
 vId('rail').addEventListener('pointerup',lacher);
 vId('rail').addEventListener('pointercancel',lacher);
 
-// Un clic pour couper tous les blancs, un clic pour tout remettre.
-// « ✂ Supprimer les blancs » ne touche QUE les coupes proposées par l'analyse
-// (blancs et reprises). Une coupe posée à la main puis volontairement rendue
-// repartait au rendu d'un clic sur un bouton qui ne promet que les blancs.
-// « Rétablir » va bien dans l'autre sens pour tout le monde : il ne retire
-// rien du rendu, il remet, et c'est ce que son nom annonce. Il ne s'affiche
-// que quand il a quelque chose à rétablir.
+// Les deux gestes de la paire, et ils sont exactement l'inverse l'un de
+// l'autre : ils ne touchent QUE les coupes proposées par l'analyse (blancs et
+// reprises). Une coupe posée à la main n'appartient qu'à celui qui l'a posée.
+// « Rétablir » l'effaçait aussi : on posait une coupe, on cliquait « Supprimer
+// les blancs », on cliquait « Rétablir » pour revenir en arrière, et le reel
+// repartait avec le passage qu'on avait justement coupé. Le lien ne s'affiche
+// que quand il a un blanc à rétablir.
 vId('supprimerBlancs').onclick=()=>{if(!reel)return;
  coupes.forEach(c=>{if(REGLES.proposee(c))c.on=true});maj2();
  poserEtat(`${coupes.filter(c=>c.on).length} coupe(s) actives — ${hms(dureeFinale(Math.min(...debuts)))} à l'arrivée.`,'')};
-vId('toutGarder').onclick=()=>{if(!reel)return;coupes.forEach(c=>c.on=false);maj2()};
+vId('toutGarder').onclick=()=>{if(!reel)return;
+ coupes.forEach(c=>{if(REGLES.proposee(c))c.on=false});maj2();
+ poserEtat(`Blancs rétablis — ${coupes.filter(c=>c.on).length} coupe(s) active(s), `+
+  `${hms(dureeFinale(Math.min(...debuts)))} à l'arrivée.`,'')};
 
 // La sensibilité de détection des blancs. Comme dans l'Atelier, elle ne change
 // qu'une chose : la durée minimale d'une pause coupée. On recalcule les blancs
@@ -931,7 +938,14 @@ function dessinerOnde(){
  // plancher de normalisation : sur une fenetre presque muette, le maximum vaut
  // trois fois rien et la moindre respiration remplirait toute la hauteur
  let fort=0.08;for(const v of pics)if(v>fort)fort=v;
- const mi=h/2,pas=l/n,ep=Math.max(dpr,pas*0.72);
+ // Mesure sur la capture de l'Atelier (selection-lucas-2026-10-08.png, rail
+ // de 51 px utiles) : les pics les plus forts montent a 71 % du rail, la
+ // mediane a 25 %. La V3 montait a 86 % avec une racine en 0,75, et sur un
+ // passage soutenu toute la piste devenait un bloc plein. On descend le
+ // plafond a 72 % et on redresse l'exposant : les creux restent des creux.
+ // Les barres, elles, gardent au moins un pixel d'ecart — a 72 % de pas
+ // elles se touchaient des que la piste etait dezoomee.
+ const mi=h/2,pas=l/n,ep=Math.max(dpr,Math.min(pas-dpr,pas*0.55));
  x.fillStyle=COULEUR_ONDE;
  // hors bornes, l'onde reste visible mais en retrait : on voit le rush avant
  // et apres le reel, et on voit qu'il n'en fait pas partie
@@ -940,7 +954,7 @@ function dessinerOnde(){
   const t=vue.a+large*(i+0.5)/n;
   x.globalAlpha=(t>=d0&&t<=d1)?1:0.23;
   // racine : le son se lit en decibels, une hauteur lineaire ecrase les voix
-  const ht=Math.max(dpr,Math.pow(pics[i]/fort,0.75)*h*0.86);
+  const ht=Math.max(dpr,Math.pow(pics[i]/fort,0.85)*h*0.72);
   x.fillRect(i*pas+(pas-ep)/2,mi-ht/2,ep,ht)}
  x.globalAlpha=1;
 }
@@ -953,18 +967,27 @@ function voiles(r){
 
 // Les coupes : hachure rouge, un clic garde ou retire, les deux bords se reglent.
 function coupesPiste(r){
+ // Hors des bornes, l'Atelier ne hachure rien : c'est ce qui donne a sa piste
+ // un avant et un apres lisibles. Le rendu ignore d'ailleurs une coupe
+ // entierement hors de la zone gardee, alors la hachurer a pleine force
+ // annonce un montage qui n'aura pas lieu. On la laisse en place et
+ // cliquable, mais en retrait, comme l'onde qui passe a 23 %.
+ const d0=debuts.length?Math.min(...debuts):borneA,d1=reel?fin:borneB;
  // les blancs d'abord, les coupes a la main par-dessus : au meme endroit,
  // c'est celle qu'on a posee soi-meme qu'on veut pouvoir attraper
  coupes.map((c,i)=>[c,i])
   .sort(([x],[y])=>(x.type==='blanc'?0:1)-(y.type==='blanc'?0:1))
   .forEach(([c,i])=>{
    if(c.b<vue.a||c.a>vue.b)return;
-   const z=document.createElement('div');z.className='coupe'+(c.on?'':' off');
+   const dehors=c.b<=d0||c.a>=d1;
+   const z=document.createElement('div');
+   z.className='coupe'+(c.on?'':' off')+(dehors?' hors':'');
    z.dataset.prise='coupe';z.dataset.i=i;
    z.style.left=pc(c.a);z.style.width=`calc(${pc(c.b)} - ${pc(c.a)})`;
    z.title=`${{reprise:'Reprise',manuel:'Coupe manuelle'}[c.type]||'Blanc'} de `+
     `${(c.b-c.a).toFixed(2)} s`+(c.texte?` : ${c.texte}`:'')+
-    (c.on?' — coupée':' — gardée')+'. Clic pour inverser, bords pour régler.';
+    (dehors?' — hors du reel, sans effet'
+            :c.on?' — coupée':' — gardée')+'. Clic pour inverser, bords pour régler.';
    z.innerHTML=`<i class="bord-a" data-prise="coupe" data-bord="a" data-i="${i}"></i>`+
                `<i class="bord-b" data-prise="coupe" data-bord="b" data-i="${i}"></i>`;
    r.appendChild(z)})}
@@ -1435,7 +1458,7 @@ async function chargerReel(id){
  vId('envoyer').textContent=dernier?'Valider et envoyer en production':'Valider et reel suivant ›';}
 function maj2(){rail();chips();sortie();
  // « Rétablir » ne s'affiche que s'il a quelque chose a remettre
- vId('toutGarder').hidden=!coupes.some(c=>c.on)}
+ vId('toutGarder').hidden=!coupes.some(c=>c.on&&REGLES.proposee(c))}
 function chips(){
  vId('exporter').hidden=debuts.length<2;
  const c=vId('debuts');c.textContent='';

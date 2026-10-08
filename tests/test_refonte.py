@@ -4,6 +4,7 @@
 """
 import importlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -257,6 +258,52 @@ class ReglesDeLaPage(unittest.TestCase):
         debut = page.index('const REGLES={')
         return page[debut:page.index('\n};', debut) + 3]
 
+    def gestes(self):
+        """Les deux boutons de la paire, pris tels quels dans la page."""
+        page = PAGE.read_text(encoding='utf-8')
+        pris = re.findall(r"vId\('(supprimerBlancs|toutGarder)'\)\.onclick=(\(\)=>\{.*?\});\n",
+                          page, re.S)
+        self.assertEqual([nom for nom, _ in pris], ['supprimerBlancs', 'toutGarder'])
+        return "".join(f"vId('{nom}').onclick={corps};\n" for nom, corps in pris)
+
+    @unittest.skipUnless(shutil.which('node'), 'node absent')
+    def test_la_paire_est_reciproque(self):
+        """Audit GPT-6, constat 2 : « Rétablir » effacait AUSSI les coupes posees a
+        la main. On posait une coupe, on cliquait « Supprimer les blancs », on
+        revenait en arriere, et le reel repartait avec le passage qu'on avait
+        justement coupe. Les deux gestes doivent etre exactement l'inverse l'un de
+        l'autre, et ne toucher que ce que l'analyse a propose."""
+        essai = self.regles() + self.gestes() + """
+const dit=(ok,quoi)=>{if(!ok){console.error('RATE : '+quoi);process.exit(1)}};
+const etat=()=>coupes.map(c=>c.on).join(',');
+
+// le depart : une coupe posee a la main et coupee, un blanc et une reprise gardes
+const depart=etat();
+dit(depart==='true,false,false','le depart du scenario, pas '+depart);
+
+gestes.supprimerBlancs();
+dit(etat()==='true,true,true','les blancs et reprises partent au rendu');
+gestes.toutGarder();
+dit(etat()===depart,'retablir redonne exactement le depart, pas '+etat());
+
+// et dans l'autre ordre, sur une coupe manuelle coupee : elle survit aux deux
+coupes=[{type:'manuel',on:true},{type:'blanc',on:false}];
+gestes.toutGarder();
+dit(coupes[0].on,'retablir ne decoupe pas une coupe posee a la main');
+gestes.supprimerBlancs();
+dit(coupes[0].on&&coupes[1].on,'supprimer les blancs n inverse pas la coupe manuelle');
+console.log('la paire : OK');
+"""
+        bancs = """
+const gestes={};
+const vId=id=>({set onclick(f){gestes[id]=f}});
+let reel={id:'P1-03'},debuts=[0],fin=10;
+let coupes=[{type:'manuel',on:true},{type:'blanc',on:false},{type:'reprise',on:false}];
+const maj2=()=>{},poserEtat=()=>{},hms=()=>'0:00',dureeFinale=()=>0;
+"""
+        r = subprocess.run(['node', '-e', bancs + essai], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr or r.stdout)
+
     @unittest.skipUnless(shutil.which('node'), 'node absent')
     def test_regles_rejouees(self):
         essai = self.regles() + """
@@ -267,9 +314,6 @@ let coupes=[{type:'blanc',on:false},{type:'reprise',on:false},{type:'manuel',on:
 coupes.forEach(c=>{if(REGLES.proposee(c))c.on=true});
 dit(coupes[0].on&&coupes[1].on,'le blanc et la reprise partent au rendu');
 dit(!coupes[2].on,'la coupe posee a la main reste posee');
-// « Tout garder » va dans l'autre sens pour tout le monde : il ne retire rien
-coupes.forEach(c=>c.on=false);
-dit(coupes.every(c=>!c.on),'tout garder remet tout');
 
 // l'apercu suit le moteur : un seul cadre en production brute
 dit(REGLES.cadreFige(true)&&!REGLES.cadreFige(false),'cadre fige en brut seulement');
