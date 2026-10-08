@@ -66,6 +66,15 @@ def dire(texte):
     print(texte, flush=True)
 
 
+def taille_source(chemin):
+    """Largeur et hauteur de la piste image, lues par ffprobe."""
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                        "stream=width,height", "-of", "json", str(chemin)],
+                       capture_output=True, text=True, check=True)
+    flux = json.loads(r.stdout)["streams"][0]
+    return int(flux["width"]), int(flux["height"])
+
+
 def grille(t):
     return round(t * IPS) / IPS
 
@@ -117,6 +126,22 @@ def cadrages(d):
     pair = lambda v: int(round(v / 2)) * 2
     lay = FORMATS[d.get("format", "vmc")]
     aW, aH = lay["a"]
+    # Les cadres arrivent dans le repere de l'outil (d["source"], 3840 de large).
+    # Sur un rush 1080p, les reprendre tels quels donne un crop plus grand que
+    # l'image, et ffmpeg refuse. Le rendu brut applique deja ce facteur.
+    reference = (d.get("source") or {}).get("w") or SRC_W
+    srcA = taille_source(d["camera"])
+    srcB = taille_source(d["ecran"]) if d.get("ecran") else srcA
+
+    def cadre(c, src):
+        W, H = src
+        k = W / reference
+        q = {z: pair(c[z] * k) for z in ("x", "y", "w", "h")}
+        q["w"], q["h"] = min(q["w"], W - W % 2), min(q["h"], H - H % 2)
+        q["x"] = max(0, min(q["x"], W - q["w"]))
+        q["y"] = max(0, min(q["y"], H - q["h"]))
+        return q
+
     # l'outil garde les cadres de plusieurs formats : on prend ceux aux bonnes proportions
     pts = []
     for p in d.get("points", []):
@@ -127,12 +152,12 @@ def cadrages(d):
             if not p.get("ecran") or abs(p["ecran"]["w"] / p["ecran"]["h"] - bW / bH) >= 0.03:
                 continue
         pts.append({"t": p["t"], "glisse": p.get("glisse", False),
-                    "A": {k: pair(v) for k, v in p["camera"].items()},
-                    "B": {k: pair(v) for k, v in (p.get("ecran") or p["camera"]).items()}})
+                    "A": cadre(p["camera"], srcA),
+                    "B": cadre(p.get("ecran") or p["camera"], srcB)})
     if not pts and not lay["b"]:
         # une camera sans cadrage pose : le plan entier, dans les deux formats
-        cadre = {"x": 0, "y": 0, "w": SRC_W, "h": SRC_H}
-        pts = [{"t": 0, "glisse": False, "A": cadre, "B": cadre}]
+        entier = {"x": 0, "y": 0, "w": pair(srcA[0]), "h": pair(srcA[1])}
+        pts = [{"t": 0, "glisse": False, "A": entier, "B": entier}]
     if not pts:
         raise RuntimeError("aucun cadrage pose pour ce format")
     return pts
