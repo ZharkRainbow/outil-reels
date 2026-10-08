@@ -125,7 +125,11 @@ class H(SimpleHTTPRequestHandler):
                                   "fini": False})
         lignes = [l for l in journal.read_text(encoding="utf-8").splitlines() if l.strip()] \
             if journal.exists() else []
-        texte = lignes[-1] if lignes else "Export en preparation..."
+        texte = lignes[-1] if lignes else "Export en préparation..."
+        if etat == "cours":
+            texte = f"En cours — {nom} : {texte}"
+        elif etat == 0:
+            texte = f"Prêt — {texte}"
         fini = etat not in ("cours",)
         if isinstance(etat, int) and etat:
             texte = f"Echec de l'export ({journal.name}) : {texte}"

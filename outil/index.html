@@ -117,19 +117,13 @@ input.txt{width:100%;background:#141417;color:#eee;border:1px solid var(--bord);
     <h2>Apercu</h2><canvas id="apercu"></canvas>
     <h2 style="margin-top:12px">Cadrages poses <span class="val" id="nbPts"></span></h2>
     <table><tbody id="pts"></tbody></table>
-    <p class="hint"><b>Par defaut le cadrage TIENT</b> jusqu'au point suivant, puis saute.
-    Coche <b>glisse</b> sur un point si tu veux qu'il derive doucement vers le suivant.<br>
-    Clic sur un marqueur ou une ligne pour t'y placer et recharger son cadrage.
-    <b>Corriger ce point</b> ecrase le point selectionne avec le cadre actuel.</p>
-    <div class="reel-seul" style="flex-direction:column;gap:6px;margin-top:12px">
-      <h2 style="margin:0">Titre du bandeau</h2>
-      <input class="txt" id="titre" placeholder="Vide : pas de bandeau">
-      <button class="act v" style="width:100%" id="exporter">Exporter (un fichier par debut)</button>
-    </div>
-    <textarea id="sortie" readonly></textarea>
-    <button class="act" style="width:100%;margin-top:6px" id="envoyer">Enregistrer le cadrage</button>
-    <button class="act g" style="width:100%;margin-top:5px" id="copier">ou copier le JSON</button>
-    <p class="hint" id="etat"></p>
+    <button class="act g" title="Le cadrage tient jusqu’au point suivant. Coche glisse pour interpoler. Clique un point pour le sélectionner, puis Corriger ce point pour le modifier." aria-label="Aide sur les cadrages">?</button>
+    <input id="titre" type="hidden">
+    <textarea id="sortie" hidden></textarea>
+    <button class="act" style="width:100%;margin-top:12px" id="envoyer">Valider et envoyer en production</button>
+    <p class="hint" id="etat" role="status" aria-live="polite"></p>
+    <button class="act g" id="exporter" hidden>Exporter (un fichier par début)</button>
+    <button id="copier" style="background:none;border:0;color:#aaa;text-decoration:underline;cursor:pointer;margin-top:10px">Copier le JSON</button>
   </aside>
 </main>
 
@@ -331,19 +325,20 @@ vId('prec').onclick=()=>{const T=vid.currentTime;const p=[...points].sort((a,b)=
  if(p.length)aller(points.indexOf(p[p.length-1]))};
 vId('suiv').onclick=()=>{const T=vid.currentTime;const p=[...points].sort((a,b)=>a.t-b.t).find(x=>x.t>T+.2);
  if(p)aller(points.indexOf(p))};
-vId('envoyer').onclick=async()=>{
- const b=vId('envoyer'), e=vId('etat');
- poserCadreSiVide();
- b.textContent='Envoi...';
- try{const r=await fetch('/enregistrer',{method:'POST',headers:{'Content-Type':'application/json'},
-   body:vId('sortie').value});
-  const j=await r.json();
-  b.textContent='Enregistre';
-  e.innerHTML=`Recu dans <b style="color:#4ef">cadrages/${j.fichier}</b>. Dis-le dans le chat.`;
-  setTimeout(()=>b.textContent='Enregistrer le cadrage',2500);
- }catch(err){b.textContent='Enregistrer le cadrage';e.textContent='Echec, utilise le bouton copier.'}};
-vId('copier').onclick=()=>{const t=vId('sortie');t.select();document.execCommand('copy');
- const b=vId('copier');b.textContent='Copie';setTimeout(()=>b.textContent='Copier le JSON',1200)};
+async function envoyerProduction(route){
+ const b=vId('envoyer'),e=vId('etat');
+ poserCadreSiVide();b.disabled=true;e.textContent='Envoi…';
+ try{
+  const r=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:vId('sortie').value});
+  const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.erreur||'Envoi refusé');
+  if(j.nom){e.textContent='En file : '+j.nom;suivre(j.nom)}
+  else e.textContent='Cadrage enregistré : '+j.fichier;
+ }catch(err){e.textContent='Échec : '+err.message}
+ finally{b.disabled=false}
+}
+vId('envoyer').onclick=()=>envoyerProduction('/enregistrer');
+vId('copier').onclick=async()=>{try{await navigator.clipboard.writeText(vId('sortie').value);
+ vId('etat').textContent='JSON copié'}catch(err){vId('etat').textContent='Copie impossible : '+err.message}};
 vId('charger').onclick=()=>{const j=prompt('Colle le JSON');if(!j)return;
  try{const d=JSON.parse(j);points=d.points.map(p=>({t:p.t,glisse:!!p.glisse,A:p.camera,B:p.ecran}));
   if(d.format)document.querySelector(`#fmt button[data-f="${d.format}"]`).click();
@@ -440,7 +435,7 @@ function dureeFinale(t){
 function fenetre(){return Math.min(DUREE,Math.max(20,...debuts.map(t=>t+8)))}
 async function chargerReel(id){
  garder();chargement=true;
- reel=REELS.find(r=>r.id===id);selP.value=id;
+ reel=REELS.find(r=>String(r.id)===String(id));selP.value=id;
  const d=await fetch(reel.donnees+'?'+Date.now()).then(r=>r.json()).catch(()=>({}));
  const e=etats[reel.id]||{};
  mots=d.mots||[];blancs=d.blancs||[];visage=d.visage||null;suivi=d.suivi||null;vus={};
@@ -500,6 +495,7 @@ function mini(){
 vId('mini').addEventListener('pointerdown',e=>{
  const r=e.currentTarget.getBoundingClientRect();place((e.clientX-r.left)/r.width*fenetre())});
 function chips(){
+ vId('exporter').hidden=debuts.length<2;
  const c=vId('debuts');c.textContent='';
  const t0=document.createElement('span');t0.textContent='Debuts :';c.appendChild(t0);
  debuts.forEach((t,i)=>{const d=document.createElement('div');d.className='chip';
@@ -529,14 +525,7 @@ vId('titre').addEventListener('input',sortie);
  if(joue&&reel&&vId('sauter').checked){const t=vid.currentTime;
   const c=coupes.find(c=>c.on&&t>=c.a&&t<c.b-0.03);if(c)vid.currentTime=c.b}
  requestAnimationFrame(sauter)})();
-vId('exporter').onclick=async()=>{
- const e=vId('etat');
- poserCadreSiVide();e.textContent='Envoi de l\'export...';
- try{const r=await fetch('/exporter',{method:'POST',headers:{'Content-Type':'application/json'},
-   body:vId('sortie').value});
-  const j=await r.json();if(!j.ok)throw new Error(j.erreur||'refuse');
-  if(j.garde){e.innerHTML=`Enregistre dans <b style="color:#4ef">cadrages/${j.fichier}</b>, sans rendu.`;return}
-  suivre(j.nom)}catch(err){e.textContent='Export impossible : '+err.message}};
+vId('exporter').onclick=()=>envoyerProduction('/exporter');
 function suivre(nom){
  clearInterval(suivre.t);
  suivre.t=setInterval(async()=>{try{
