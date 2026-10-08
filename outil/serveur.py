@@ -28,6 +28,7 @@ RACINE = Path(__file__).parent
 sys.path.insert(0, str(RACINE.parent / "scripts"))
 import reglages
 import formats
+import etalonnage
 
 DEPOT = Path(os.environ.get("REELS_CADRAGES", RACINE / "cadrages"))
 RENDU = RACINE.parent / "scripts" / "rendre-reel.py"
@@ -36,6 +37,14 @@ TAILLE_BLOC = 1 << 20
 # dix rendus 4K se disputent la machine.
 FILE = queue.Queue()
 ETATS = {}            # nom -> "attente", "cours", ou code de sortie du rendu
+# Mesures et images de controle de l'etalonnage. Une mesure coute cinq appels
+# a ffmpeg, une image un : sans ce cache, changer de reel et revenir relancerait
+# tout, et la machine n'a que deux coeurs. La cle porte la date et la taille du
+# fichier : un rush remplace est remesure.
+DIAGS = {}
+APERCUS = {}
+APERCUS_MAX = 40
+LARGE_APERCU = 384
 
 
 def ouvrier():
@@ -125,6 +134,26 @@ def fiche_du_lot(lot_id, reel_id):
     return lot, None
 
 
+def rush_du_reel(lot_id, reel_id, source):
+    """Le chemin du rush, pris dans le MANIFESTE et jamais dans la requete.
+    Meme principe que CHAMPS_DU_LOT a l'enregistrement : la page choisit un
+    reel et une camera, pas un fichier."""
+    if source not in ("camera", "ecran"):
+        raise ValueError("Source inconnue")
+    lot, fiche = fiche_du_lot(lot_id, reel_id)
+    if fiche is None or not fiche.get(source):
+        raise ValueError("Reel absent du manifeste, ou sans ce rush")
+    chemin = (RACINE.parent / fiche[source]).resolve()
+    if not chemin.is_file():
+        raise ValueError(f"Rush introuvable : {fiche[source]}")
+    return chemin
+
+
+def _cle(chemin):
+    s = chemin.stat()
+    return (str(chemin), int(s.st_mtime), s.st_size)
+
+
 def manifeste_lot(nom):
     if not nom or nom in (".", "..") or "/" in nom or "\\" in nom:
         raise ValueError("Nom de lot invalide")
@@ -134,6 +163,25 @@ def manifeste_lot(nom):
     if nom == "reels" and not chemin.exists():
         return Path(reglages.LOTS) / "reels.json"  # ancien lot podcast
     return chemin
+
+
+def image_de_controle(rush, filtre):
+    """Une image fixe du rush, LUT posee, pour juger l'etalonnage sans encoder.
+
+    Prise a un cinquieme du rush : le tout debut est souvent un claquement de
+    mains ou une mire, qui ne dit rien de l'etalonnage de la scene.
+    """
+    total = etalonnage.duree(rush)
+    t = min(max(0.0, total * 0.2), max(0.0, total - 0.04))
+    chaine = (filtre + "," if filtre else "") + f"scale={LARGE_APERCU}:-2:flags=lanczos"
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostdin", "-v", "error",
+                        "-ss", f"{t:.3f}", "-i", str(rush), "-frames:v", "1",
+                        "-vf", chaine, "-q:v", "3", "-f", "mjpeg", "-"],
+                       capture_output=True, timeout=90)
+    if r.returncode or not r.stdout:
+        raise ValueError((r.stderr or b"").decode("utf-8", "replace").strip()
+                         or "ffmpeg n'a pas produit d'image")
+    return r.stdout
 
 
 class H(SimpleHTTPRequestHandler):
@@ -204,6 +252,14 @@ class H(SimpleHTTPRequestHandler):
                 raise ValueError("Objet attendu")
         except Exception:
             return self.send_error(400)
+        # l'etalonnage n'arrive jamais comme un chemin, seulement comme une
+        # cle de la table : un nom de .cube venu du reseau n'a rien a faire
+        # dans une ligne de commande ffmpeg
+        for source, cle in (d.get("etalonnages") or {}).items():
+            if source not in ("camera", "ecran") or cle not in etalonnage.ETALONNAGES:
+                return self.send_error(400, "Étalonnage inconnu")
+        if d.get("titre_position") not in (None, "haut", "milieu", "aucun"):
+            return self.send_error(400, "Position de titre inconnue")
         DEPOT.mkdir(parents=True, exist_ok=True)
         reel = "reel" in d and "debuts" in d
         if reel:
@@ -249,6 +305,41 @@ class H(SimpleHTTPRequestHandler):
         print(f"[{datetime.now():%H:%M:%S}] export en file : {nom}", flush=True)
         self.repondre({"ok": True, "nom": nom, "fichier": f"{nom}.json (export en file)"})
 
+    def etalonner(self, url):
+        """Mesure d'un rush, ou son image de controle avec la LUT posee."""
+        q = parse_qs(url.query)
+        try:
+            rush = rush_du_reel(q.get("lot", ["reels"])[0], q.get("reel", [""])[0],
+                               q.get("source", [""])[0])
+        except (ValueError, OSError, json.JSONDecodeError) as pb:
+            return self.send_error(400, str(pb))
+        if url.path == "/etalonnage":
+            cle = _cle(rush)
+            if cle not in DIAGS:
+                DIAGS[cle] = etalonnage.examiner(rush)
+            return self.repondre(DIAGS[cle])
+        choix = q.get("choix", ["aucun"])[0]
+        try:
+            filtre = etalonnage.filtre(choix, etalonnage.profondeur_bits(rush))
+        except ValueError as pb:
+            return self.send_error(409, str(pb))
+        cle = _cle(rush) + (choix,)
+        if cle not in APERCUS:
+            try:
+                APERCUS[cle] = image_de_controle(rush, filtre)
+            except (ValueError, OSError, subprocess.SubprocessError) as pb:
+                return self.send_error(500, str(pb)[:200])
+            # on ne garde pas le journal de toute la session en memoire
+            for vieille in list(APERCUS)[:-APERCUS_MAX]:
+                APERCUS.pop(vieille, None)
+        donnees = APERCUS[cle]
+        self.send_response(200)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Content-Length", str(len(donnees)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(donnees)
+
     def do_GET(self):
         if not self.hote_local():
             return
@@ -256,6 +347,12 @@ class H(SimpleHTTPRequestHandler):
         if url.path == "/formats.json":
             # la page lit la meme table que les scripts de rendu
             return self.repondre(json.loads(formats.FICHIER.read_text(encoding="utf-8")))
+        if url.path == "/etalonnages.json":
+            # la page lit la meme table que produire-split.py, et sait des le
+            # chargement quelle LUT manque sur le disque
+            return self.repondre(etalonnage.catalogue())
+        if url.path in ("/etalonnage", "/etalonnage-apercu"):
+            return self.etalonner(url)
         if url.path == "/lots":
             lots = [] if (Path(reglages.LOTS) / "exemple" / "reels.json").exists() else [{"id": "exemple", "nom": "Exemple"}]
             chemins = list(Path(reglages.LOTS).glob("*/reels.json"))
