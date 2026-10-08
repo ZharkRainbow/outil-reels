@@ -123,9 +123,18 @@ le navigateur au fur et à mesure : tu peux fermer et revenir.
 
 ### 3. Exporter
 
-Le bouton **Valider et envoyer en production** met le rendu dans une file. Les exports passent un par un,
-pour que dix rendus ne se disputent pas la machine. L'avancement s'affiche dans
-la page, et le détail va dans `outil/cadrages/<nom>.log`.
+Un seul geste : **Valider et reel suivant ›** (raccourci `N`) enregistre le
+cadrage, met le rendu dans la file et ouvre le reel suivant. Le reel passe en ✓
+dans le menu. Sur le dernier reel, le bouton devient **Valider et envoyer en
+production** et on reste sur place.
+
+Pour changer de reel sans rien envoyer : les deux flèches discrètes sous la
+piste, **‹ Reel précédent** et **passer sans valider ›**.
+
+Les exports passent un par un, pour que dix rendus ne se disputent pas la
+machine. Le bloc **Suivi de production** de la colonne de droite garde une ligne
+par reel envoyé : on valide trois reels à la suite et on voit les trois avancer,
+même après avoir changé de reel. Le détail va dans `outil/cadrages/<nom>.log`.
 
 Les fichiers finis arrivent dans `rendus/<sortie>/Vertical/` ou `Horizontal/`.
 
@@ -287,10 +296,11 @@ cadrer, sans sous-titres ni habillage :
    - `"cadres": {"vmc_haut": {...}, "vmc": {...}}` pour les cadres fixes par défaut ;
    - `"production": {"script": "produire-split.py", "sortie": "<dossier>"}`.
 4. Lancer `python3 outil/serveur.py`, puis ouvrir `http://localhost:8765/?lot=Podcast`.
-5. Régler début, fin et coupes, puis **Valider et envoyer en production**.
-   L'état du rendu apparaît sous le bouton ; **Reel suivant** (raccourci `N`)
-   permet de poursuivre. Les ✓ du menu indiquent les validations envoyées depuis
-   ce navigateur, pas une garantie de réussite du rendu.
+5. Régler début, fin et coupes, puis **Valider et reel suivant ›** (raccourci
+   `N`) : le reel part en production et le suivant s'ouvre. Le bloc **Suivi de
+   production** garde une ligne par reel envoyé. Les ✓ du menu indiquent les
+   validations envoyées depuis ce navigateur, pas une garantie de réussite du
+   rendu.
 
 L'ancien `lots/reels.json` reste accessible avec `/?lot=reels`, sans lien symbolique.
 Une nouvelle préparation avec `--lot reels` reprend ses réglages dans `lots/reels/`.

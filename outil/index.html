@@ -93,6 +93,22 @@ td button{background:none;border:0;color:var(--rouge);cursor:pointer;font-size:1
 #etat.pret{color:#cfe9d8}
 #etat.rate{color:#ffc3cf}
 @keyframes bat{50%{opacity:.25}}
+/* Suivi de production : une ligne par reel envoye. Un seul paragraphe ne
+   suffisait plus — des qu'on passait au reel suivant, le rendu en cours
+   disparaissait de l'ecran alors qu'il tournait encore. */
+#prod{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+#prod li{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;line-height:1.45;
+ color:var(--doux);word-break:break-word}
+#prod li::before{content:'';flex:none;width:8px;height:8px;margin-top:4px;border-radius:50%;
+ background:var(--bord)}
+#prod li.attente::before{background:var(--jaune)}
+#prod li.cours::before{background:var(--jaune);animation:bat 1.1s ease-in-out infinite}
+#prod li.pret::before{background:var(--vert)}
+#prod li.rate::before{background:var(--rouge)}
+#prod li>div{min-width:0}
+#prod b{display:block;color:var(--texte);font-weight:600}
+#prod li.pret b{color:#cfe9d8}
+#prod li.rate b{color:#ffc3cf}
 .secondaire{background:none;border:0;color:var(--doux);text-decoration:underline;cursor:pointer;
  font-size:11.5px;padding:0;align-self:flex-start}
 .hint{color:#8a8a92;font-size:11px;line-height:1.5;margin:8px 0 0}
@@ -219,6 +235,8 @@ body.solo .sources{grid-template-rows:1fr}
 body.solo .sources .src:nth-child(2){display:none}
 .reel-seul{display:none}
 body.reels .reel-seul{display:flex}
+/* display gagne sur l'attribut hidden : il faut le lui redire */
+body.reels .reel-seul[hidden]{display:none}
 
 @media(max-width:1150px){
  main{grid-template-columns:minmax(200px,auto) minmax(120px,auto) 250px}
@@ -277,9 +295,16 @@ body.reels .reel-seul{display:flex}
     </div>
 
     <div class="bloc principal">
-      <button class="act" id="envoyer">Valider et envoyer en production</button>
+      <button class="act" id="envoyer">Valider et reel suivant ›</button>
       <p id="etat" role="status" aria-live="polite">Prêt à envoyer.</p>
+      <p class="hint">Raccourci <kbd>N</kbd>. Pour changer de reel sans rien envoyer :
+        « passer sans valider » sous la piste.</p>
       <button class="act g" id="exporter" hidden style="width:100%;margin-top:9px">Exporter un fichier par début</button>
+    </div>
+
+    <div class="bloc reel-seul" id="blocProd" hidden style="flex-direction:column">
+      <h2>Suivi de production</h2>
+      <ul id="prod"></ul>
     </div>
 
     <button class="secondaire" id="copier">Copier le JSON du cadrage</button>
@@ -338,10 +363,11 @@ body.reels .reel-seul{display:flex}
     </div>
 
     <div class="groupe navigation" aria-label="Navigation">
-      <span>Navigation <kbd>N</kbd></span>
+      <span>Navigation — valider, c'est <kbd>N</kbd></span>
       <div class="boutons">
-        <button class="act g" id="reelPrec">‹ Reel précédent</button>
-        <button class="act suite" id="reelSuiv">Reel suivant ›</button>
+        <button class="act g" id="reelPrec" title="Revenir au reel précédent sans rien envoyer">‹ Reel précédent</button>
+        <button class="act fantome" id="passer"
+          title="Ouvrir le reel suivant sans l'envoyer en production">passer sans valider ›</button>
       </div>
     </div>
   </div>
@@ -437,7 +463,7 @@ addEventListener('keydown',e=>{
  if(e.target.closest?.('input,textarea,select,[contenteditable]')||e.ctrlKey||e.metaKey)return;
  if(e.code==='Space'){e.preventDefault();vId('play').click();return}
  if(!e.altKey){
-  const actions={i:'debutIci',o:'finIci',c:'couperIci',n:'reelSuiv',ArrowLeft:e.shiftKey?'m10':'m1',ArrowRight:e.shiftKey?'p10':'p1'};
+  const actions={i:'debutIci',o:'finIci',c:'couperIci',n:'envoyer',ArrowLeft:e.shiftKey?'m10':'m1',ArrowRight:e.shiftKey?'p10':'p1'};
   const id=actions[e.key]||actions[e.key.toLowerCase()];
   if(id){e.preventDefault();vId(id).click()}return;
  }
@@ -749,22 +775,63 @@ vId('prec').onclick=()=>{const T=vid.currentTime;const p=[...points].sort((a,b)=
  if(p.length)aller(points.indexOf(p[p.length-1]))};
 vId('suiv').onclick=()=>{const T=vid.currentTime;const p=[...points].sort((a,b)=>a.t-b.t).find(x=>x.t>T+.2);
  if(p)aller(points.indexOf(p))};
-// etat du rendu affiche sous le bouton : en file, en cours, pret ou echec
+// message court sur le reel courant : ce n'est pas le suivi de production
 function poserEtat(texte,classe){const e=vId('etat');
  e.textContent=texte;e.className=classe||''}
+// Le suivi de production garde une ligne par reel envoye, dans la colonne de
+// droite. On quitte le reel aussitot valide : sans cette liste, son rendu
+// disparaissait de l'ecran pendant qu'il tournait encore.
+let envois=[];
+function listerProduction(){
+ const l=vId('prod');l.textContent='';
+ vId('blocProd').hidden=!envois.length;
+ for(const e of [...envois].reverse()){
+  const li=document.createElement('li');li.className=e.classe||'';
+  const d=document.createElement('div');
+  const n=document.createElement('b');n.textContent=e.nom;
+  const s=document.createElement('span');s.textContent=e.texte;
+  d.append(n,s);li.appendChild(d);l.appendChild(li)}}
+// une seule interrogation pour toutes les taches en cours, qui s'arrete seule
+function sonder(){
+ if(sonder.t)return;
+ sonder.t=setInterval(async()=>{
+  const encours=envois.filter(e=>e.tache&&!e.fini);
+  if(!encours.length){clearInterval(sonder.t);sonder.t=0;return}
+  for(const e of encours){
+   try{const j=await fetch('/export-etat?nom='+encodeURIComponent(e.tache)).then(r=>r.json());
+    e.texte=j.texte;e.fini=!!j.fini;
+    e.classe=!j.fini?(/file d/.test(j.texte)?'attente':'cours'):(j.ok?'pret':'rate');
+   }catch(err){}}
+  listerProduction()},1500)}
+// renvoie vrai si le serveur a pris l'envoi : c'est ce qui autorise a enchainer
 async function envoyerProduction(route){
  const b=vId('envoyer');
- poserCadreSiVide();b.disabled=true;poserEtat('Envoi en cours…','cours');
+ poserCadreSiVide();
+ // le corps est fige maintenant : on peut changer de reel sans attendre
+ const corps=vId('sortie').value, quel=reel?reel.nom:'Cadrage';
+ const e={nom:quel,texte:'Envoi en cours…',classe:'cours'};
+ envois.push(e);listerProduction();
+ b.disabled=true;poserEtat('Envoi en cours…','cours');
  try{
-  const r=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:vId('sortie').value});
+  const r=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:corps});
   const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.erreur||'Envoi refusé');
   if(reel){validations[reel.id]=true;try{localStorage.setItem(CLE+'-validations',JSON.stringify(validations))}catch(err){}marquerReels()}
-  if(j.nom){poserEtat('En file d’attente : '+j.nom,'attente');return suivre(j.nom,b)}
-  else poserEtat('Cadrage enregistré : '+j.fichier,'pret');
- }catch(err){poserEtat('Échec de l’envoi : '+err.message,'rate')}
- b.disabled=false;
+  if(j.nom){e.tache=j.nom;e.texte='En file d’attente';e.classe='attente';poserEtat('Envoyé en production.','attente');sonder()}
+  else{e.texte='Cadrage enregistré : '+j.fichier;e.classe='pret';e.fini=true;poserEtat('Cadrage enregistré.','pret')}
+  listerProduction();b.disabled=false;return true;
+ }catch(err){
+  e.texte='Échec : '+err.message;e.classe='rate';e.fini=true;listerProduction();
+  poserEtat('Échec de l’envoi : '+err.message,'rate');b.disabled=false;return false}
 }
-vId('envoyer').onclick=()=>envoyerProduction('/enregistrer');
+// Un seul geste : enregistrer, envoyer, ouvrir le reel suivant. On ne passe au
+// suivant que si le serveur a pris l'envoi — sinon l'echec defilerait sans
+// qu'on le voie.
+async function validerEtSuivant(){
+ if(chargement)return;
+ if(!await envoyerProduction('/enregistrer'))return;
+ if(selP.selectedIndex<selP.options.length-1)changerReel(1);
+}
+vId('envoyer').onclick=validerEtSuivant;
 vId('copier').onclick=async()=>{try{await navigator.clipboard.writeText(vId('sortie').value);
  vId('etat').textContent='JSON copié'}catch(err){vId('etat').textContent='Copie impossible : '+err.message}};
 vId('charger').onclick=()=>{const j=prompt('Colle le JSON');if(!j)return;
@@ -816,7 +883,8 @@ function montrerFormats(liste){
 const selP=vId('passage');
 PASSAGES.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent=p[0];selP.appendChild(o)});
 function changerReel(pas){if(chargement)return;const i=selP.selectedIndex+pas;if(i<0||i>=selP.options.length)return;selP.selectedIndex=i;selP.onchange()}
-vId('reelSuiv').onclick=()=>changerReel(1);vId('reelPrec').onclick=()=>changerReel(-1);
+// les deux fleches discretes : elles n'envoient rien
+vId('passer').onclick=()=>changerReel(1);vId('reelPrec').onclick=()=>changerReel(-1);
 selP.onchange=()=>{
  if(chargement){selP.value=reel.id;return}
  if(REELS)return chargerReel(selP.value);
@@ -955,7 +1023,10 @@ async function chargerReel(id){
   validations[reel.id]?'pret':'');
  vid.src=reel.proxy;vid.load();
  forme=d.forme||null;toutVoir();table();chips();
- vId('reelPrec').disabled=selP.selectedIndex===0;vId('reelSuiv').disabled=selP.selectedIndex===selP.options.length-1;}
+ const dernier=selP.selectedIndex===selP.options.length-1;
+ vId('reelPrec').disabled=selP.selectedIndex===0;vId('passer').disabled=dernier;
+ vId('envoyer').disabled=false;
+ vId('envoyer').textContent=dernier?'Valider et envoyer en production':'Valider et reel suivant ›';}
 function maj2(){rail();chips();sortie()}
 function chips(){
  vId('exporter').hidden=debuts.length<2;
@@ -1004,17 +1075,6 @@ vId('couperIci').onclick=()=>{if(!reel)return;
  coupes.push({a:+a.toFixed(3),b:+z.toFixed(3),type:'manuel',on:true,texte:'coupe ajoutée à la main'});maj2()};
 vId('titre').addEventListener('input',sortie);
 vId('exporter').onclick=()=>envoyerProduction('/exporter');
-// Le bouton reste eteint tant que le rendu tourne : reclique, on empilait un
-// second encodage identique dans la file, pour rien.
-function suivre(nom,bouton){
- clearInterval(suivre.t);
- if(bouton){bouton.disabled=true;bouton.dataset.libelle=bouton.dataset.libelle||bouton.textContent;
-  bouton.textContent='Rendu en cours…'}
- const rendre=()=>{if(!bouton)return;bouton.disabled=false;bouton.textContent=bouton.dataset.libelle};
- suivre.t=setInterval(async()=>{try{
-  const j=await fetch('/export-etat?nom='+encodeURIComponent(nom)).then(r=>r.json());
-  poserEtat(j.texte,!j.fini?(/file d/.test(j.texte)?'attente':'cours'):(j.ok?'pret':'rate'));
-  if(j.fini){clearInterval(suivre.t);rendre()}}catch(err){}},1500)}
 function chargerLot(){
 fetch('/lots/'+encodeURIComponent(LOTP)+'/reels.json?'+Date.now()).then(r=>r.ok?r.json():null).then(j=>{
  if(!j||!j.reels||!j.reels.length)throw new Error('Lot absent ou vide');
