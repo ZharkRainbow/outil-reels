@@ -224,6 +224,17 @@ class TousLesFormats(unittest.TestCase):
                 # rien a empiler : la zone unique sert les deux places
                 self.assertEqual(pts[0]['A'], pts[0]['B'], cle)
 
+    def test_le_rendu_habille_nomme_chaque_format(self):
+        """Sept des dix formats se rangent dans « Vertical » : sans le format
+        dans le nom, le second export du meme reel effacait le premier."""
+        rendre = importlib.import_module('rendre-reel')
+        d = {'reel': 1, 'titre': 'Mon titre'}
+        noms = {}
+        for cle in formats.ORDRE:
+            noms.setdefault(formats.dossier(cle), set()).add(rendre.nom_de_sortie(d, cle))
+        self.assertEqual(sum(len(v) for v in noms.values()), len(formats.ORDRE))
+        self.assertIn('01 - Mon titre - vertical 50-50', noms['Vertical'])
+
     def test_le_rendu_brut_accepte_les_dix_formats(self):
         brut = importlib.import_module('produire-split')
         for cle in formats.ORDRE:
@@ -285,7 +296,11 @@ class NomsDuRendu(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             dossier = Path(tmp)
             fichier = dossier / 'cadrage.json'
-            for ident, attendu in [('P1-03', 'P1-03.mp4'), ('7', '07.mp4'), ('A/B', 'A-B.mp4')]:
+            # le nom porte aussi le format, pour que deux formats du meme reel
+            # ne tombent pas sur le meme fichier
+            for ident, attendu in [('P1-03', 'P1-03 - vertical 50-50.mp4'),
+                                   ('7', '07 - vertical 50-50.mp4'),
+                                   ('A/B', 'A-B - vertical 50-50.mp4')]:
                 fichier.write_text(json.dumps({'reel': ident, 'format': 'vmc',
                                                'points': [{}], 'debuts': [0]}))
                 def montage(d, debut, brut):

@@ -356,6 +356,21 @@ JARGON |= {vocabulaire.MARQUE.lower(), vocabulaire.MARQUE_GROUPE.lower(),
 JARGON |= {v.lower() for v in vocabulaire.MOT_A_MOT.values()}
 
 
+def nom_de_sortie(d, cle):
+    """Nom du fichier rendu : "07 - Prenom Mon titre - vertical 50-50.mp4".
+
+    Le libelle du format vient de la table, comme du cote du rendu brut. Sans
+    lui, deux formats du meme reel tombaient sur le meme fichier : sept des dix
+    formats se rangent dans « Vertical », et le second export effacait le
+    premier en silence.
+    """
+    titre = re.sub(r'[/:\\]', "-", d.get("titre", ""))
+    reste = " ".join(x for x in (reglages.PREFIXE, titre) if x)
+    ident = re.sub(r'[/:\\\x00-\x1f]', "-", str(d['reel']))
+    debut = (ident.zfill(2) if ident.isdecimal() else ident) + (f" - {reste}" if reste else "")
+    return f"{debut} - {formats.nom_fichier(cle)}"
+
+
 def main():
     d = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     format_ = d.get("format", "vmc")
@@ -375,12 +390,7 @@ def main():
     dossier = racine / formats.dossier(format_)
     dossier.mkdir(parents=True, exist_ok=True)
     d["titre"] = majuscule(d.get("titre", "").strip())
-    titre = re.sub(r'[/:\\]', "-", d["titre"])
-    # "07 - Prenom Mon titre.mp4", ou simplement "07 - Mon titre.mp4"
-    etiquettes = [reglages.PREFIXE, titre]
-    reste = " ".join(x for x in etiquettes if x)
-    ident = re.sub(r'[/:\\\x00-\x1f]', "-", str(d['reel']))
-    nom = (ident.zfill(2) if ident.isdecimal() else ident) + (f" - {reste}" if reste else "")
+    nom = nom_de_sortie(d, format_)
     faits = []
     for i, debut in enumerate(debuts, 1):
         etiquette = f"{nom} (debut {i})" if len(debuts) > 1 else nom
