@@ -1,0 +1,33 @@
+{
+ "_lisez_moi": [
+  "Les trois etalonnages possibles, et rien d'autre. Table partagee par la page",
+  "(servie telle quelle sur /etalonnages.json), par l'apercu du serveur et par",
+  "le rendu (produire-split.py) : un choix fait dans l'outil est exactement la",
+  "LUT que ffmpeg applique.",
+  "",
+  "fichier  : nom du .cube cherche dans le dossier des LUT. Ce dossier n'est PAS",
+  "           dans le depot (public) : REELS_LUTS dans scripts/reglages.py, qui",
+  "           vaut ~/luts par defaut.",
+  "pour     : quelle detection propose ce choix par defaut. « log » pour un rush",
+  "           tourne en Log, « 709 » pour un rush deja en Rec.709."
+ ],
+
+ "ordre": ["aucun", "cine709", "delog"],
+
+ "etalonnages": {
+  "aucun": {
+   "nom": "Aucun", "detail": "Le rush sort tel qu'il est entré",
+   "fichier": null, "pour": "709"
+  },
+  "cine709": {
+   "nom": "709 · Apple Cinestyle",
+   "detail": "Rush déjà en Rec.709 — le rendu Cinestyle, sans délog",
+   "fichier": "Apple - Cinestyle (sans LOG).cube", "pour": null
+  },
+  "delog": {
+   "nom": "Délog · Log M → Rec.709",
+   "detail": "Rush tourné en Log M — ramené en Rec.709",
+   "fichier": "Log M to Rec709.cube", "pour": "log"
+  }
+ }
+}

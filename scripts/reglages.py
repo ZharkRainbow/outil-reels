@@ -44,6 +44,11 @@ LANGUE = os.environ.get("REELS_LANGUE", "fr")
 # Voir vocabulaire.exemple.json pour le format.
 VOCABULAIRE = _chemin("REELS_VOCABULAIRE", RACINE / "vocabulaire.json")
 
+# Ou sont les LUT .cube de l'etalonnage. Elles ne sont PAS dans le depot, qui
+# est public : ce sont des fichiers sous licence. Pour les essais du depot,
+# pointer sur ~/projets/references/luts.
+LUTS = _chemin("REELS_LUTS", "~/luts")
+
 # Port du serveur local.
 PORT = int(os.environ.get("REELS_PORT", "8765"))
 
@@ -100,12 +105,21 @@ def manquants():
         trous.append(f"detecteur de visage non compile : {REPERER_VISAGE}")
     if not POLICE.exists():
         trous.append(f"police absente : {POLICE}")
+    if not LUTS.is_dir():
+        trous.append(f"dossier des LUT absent : {LUTS} (voir REELS_LUTS)")
+    else:
+        import json
+        table = json.loads((RACINE / "scripts" / "etalonnages.json")
+                           .read_text(encoding="utf-8"))
+        for cle, e in table["etalonnages"].items():
+            if e["fichier"] and not (LUTS / e["fichier"]).is_file():
+                trous.append(f"LUT absente : {LUTS / e['fichier']}")
     return trous
 
 
 if __name__ == "__main__":
-    for nom in ("RACINE", "LOTS", "SORTIE", "MODELE_WHISPER", "VOCABULAIRE",
-                "REPERER_VISAGE", "POLICE", "POLICE_TITRE"):
+    for nom in ("RACINE", "LOTS", "SORTIE", "LUTS", "MODELE_WHISPER",
+                "VOCABULAIRE", "REPERER_VISAGE", "POLICE", "POLICE_TITRE"):
         print(f"{nom:16} {globals()[nom]}")
     print(f"{'PREFIXE':16} {PREFIXE or '(aucun)'}")
     print(f"{'PORT':16} {PORT}")

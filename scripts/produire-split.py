@@ -11,6 +11,10 @@ fond de la taille demandee, puis une zone posee par-dessus. La geometrie n'est
 ecrite nulle part ici — un cadre pose dans la page tombe donc exactement la ou
 le rendu le met, sans avoir a encoder pour s'en apercevoir.
 
+L'etalonnage choisi dans l'outil est applique AVANT le recadrage : une LUT
+travaille sur l'image entiere, et la poser apres le crop donnerait un resultat
+different de l'apercu.
+
 Le son vient du mix préparé avec --mixer-son, sinon de la caméra du haut.
 Les cadres de l'outil sont exprimes dans le repere de la source de l'outil :
 chaque zone est remise a l'echelle de la source dont elle vient.
@@ -27,6 +31,7 @@ RACINE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 reglages = import_module("reglages")
 formats = import_module("formats")
+etalonnage = import_module("etalonnage")
 
 
 def flux_video(chemin):
@@ -51,6 +56,9 @@ def verifier(d):
         raise ValueError("Aucun cadrage posé : pose un cadrage avant d'envoyer en production")
     if not d.get("debuts") or d.get("fin") is None:
         raise ValueError("Ce cadrage n'a pas de début ou pas de fin : rien à monter")
+    for source, cle in (d.get("etalonnages") or {}).items():
+        # autant le dire maintenant qu'au bout de dix minutes d'encodage
+        etalonnage.verifier_present(cle)
     if len(d["points"]) > 1:
         print(f"{len(d['points'])} cadrages posés, le rendu brut ne garde que le premier "
               f"(cadre fixe)", flush=True)
@@ -95,6 +103,13 @@ def rendre(d, sortie):
     # Quelle source les fournit, c'est la table qui le dit : le vertical
     # consulting prend ses DEUX zones dans le rush du haut.
     large = {"camera": large_cam, "ecran": flux_video(ecran)[0] if d.get("ecran") else large_cam}
+    # la LUT de chaque source, calculee une fois : « Aucun » donne une chaine vide
+    choix = d.get("etalonnages") or {}
+    luts = {}
+    for source, chemin in (("camera", cam), ("ecran", ecran)):
+        f_lut = etalonnage.filtre(choix.get(source, "aucun"),
+                                  etalonnage.profondeur_bits(chemin))
+        luts[source] = f_lut + "," if f_lut else ""
     cadre = {"a": p["camera"], "b": p.get("ecran")}
     entree = {"camera": "0:v", "ecran": "1:v"}
     decoupes = []
@@ -118,7 +133,8 @@ def rendre(d, sortie):
             # seul le second rush porte le decalage de calage et le retournement
             avant = f"{alignement}{rotation}," if z["source"] == "ecran" else ""
             bout += (f"[{entree[z['source']]}]{avant}trim={s}:{f},setpts=PTS-STARTPTS,"
-                     f"fps={cadence},crop={c['w']}:{c['h']}:{c['x']}:{c['y']},"
+                     f"fps={cadence},{luts[z['source']]}"
+                     f"crop={c['w']}:{c['h']}:{c['x']}:{c['y']},"
                      f"scale={z['w']}:{z['h']},setsar=1[z{nom_zone}{i}];")
         # un fond aux dimensions du format, puis une zone posee par-dessus.
         # shortest=1 sur le premier overlay : sans lui, le fond de « color » est
@@ -140,8 +156,12 @@ def rendre(d, sortie):
     # le nom porte le format : deux formats du meme reel cohabitent dans le dossier
     suffixe = f" - {f_['fichier']}"
     nom = (f"{ident} - {titre}{suffixe}.mp4" if titre else f"{ident}{suffixe}.mp4")
+    dits = [f"{s} {etalonnage.trouver(c)['nom']}" for s, c in sorted(choix.items())
+            if c != "aucun"]
     print(f"{f_['nom']} — {len(gardes)} morceau(x), "
-          f"{sum(f - s for s, f in gardes):.1f} s -> {nom}", flush=True)
+          f"{sum(f - s for s, f in gardes):.1f} s"
+          + (" — étalonnage : " + ", ".join(dits) if dits else "")
+          + f" -> {nom}", flush=True)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(cam), "-i", str(ecran),
                     *(["-i", d["audio"]] if d.get("audio") else []),
                     # un seul thread de filtrage : sur deux coeurs, en paralleliser
