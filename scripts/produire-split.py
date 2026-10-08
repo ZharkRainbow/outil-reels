@@ -15,9 +15,12 @@ import platform
 import re
 import subprocess
 import sys
+from importlib import import_module
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+reglages = import_module("reglages")
 
 
 def flux_video(chemin):
@@ -92,9 +95,19 @@ def rendre(d, sortie):
     return sortie / nom
 
 
+def dossier_de_sortie(valeur):
+    """Un dossier relatif est resolu depuis REELS_SORTIE, jamais depuis le
+    repertoire courant : le serveur est lance a la racine du depot public,
+    et les reels finis y atterrissaient."""
+    if not valeur:
+        return reglages.SORTIE
+    chemin = Path(valeur).expanduser()
+    return chemin if chemin.is_absolute() else reglages.SORTIE / chemin
+
+
 def main():
     d = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    sortie = Path(sys.argv[2])
+    sortie = dossier_de_sortie(sys.argv[2] if len(sys.argv) > 2 else None)
     debuts = d["debuts"]
     faits = []
     for i, debut in enumerate(debuts, 1):

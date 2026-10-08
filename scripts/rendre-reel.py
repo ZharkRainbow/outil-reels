@@ -328,7 +328,9 @@ def main():
     # rangement : <sortie>/Vertical/01 - <titre>.mp4
     racine = SORTIE
     if d.get("sortie") and "REELS_SORTIE" not in os.environ:
-        racine = SORTIE.parent / d["sortie"]
+        # dans SORTIE, pas a cote : SORTIE.parent, c'est la racine du depot,
+        # et "sortie": "Mes reels" y faisait apparaitre un dossier de rendus
+        racine = SORTIE / d["sortie"]
     dossier = racine / DOSSIERS[format_]
     dossier.mkdir(parents=True, exist_ok=True)
     d["titre"] = majuscule(d.get("titre", "").strip())
