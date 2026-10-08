@@ -5,16 +5,19 @@ Chaque reel est une prise filmee par deux cameras : la face cam (reference du
 temps et du son) et la camera sur la tablette. Pour chaque paire :
 
 1. mesure le decalage entre les deux cameras par le son (caler-flux.py) ;
-2. fabrique le proxy de l'outil : les deux flux cote a cote en 1280x360,
-   cales, avec le son de la face cam, une image-cle toutes les 10 images ;
-3. detecte les blancs par le niveau sonore moyen, par tranches de 10 ms ;
-4. transcrit la face cam mot a mot (whisper, -ml 1) sur un son dont les longs
+2. avec --mixer-son, melange les deux micros sur le temps de la face cam ;
+3. fabrique le proxy de l'outil : les deux flux cote a cote en 1280x360,
+   cales, avec le son de la face cam (ou le mix), une image-cle toutes les
+   10 images ;
+4. detecte les blancs par le niveau sonore moyen, par tranches de 10 ms ;
+5. transcrit la face cam mot a mot (whisper, -ml 1) sur un son dont les longs
    blancs ont ete raccourcis, puis recale chaque mot sur le temps reel ;
-5. propose les coupes : les blancs, plus les reprises et faux departs notes a
-   la main dans reels/decisions.json (reperes par le texte, pas par le temps).
+6. propose les coupes : les blancs, plus les reprises et faux departs notes a
+   la main dans decisions.json (reperes par le texte, pas par le temps).
 
-Chaque etape est sautee si son fichier existe deja, sauf les coupes, toujours
-recalculees.
+Chaque etape est sautee si son fichier existe deja. Les coupes sont toujours
+recalculees. Si les sources ou les options ont change depuis la derniere fois,
+les fichiers concernes sont au contraire supprimes puis refaits.
 
 Pourquoi raccourcir les blancs avant whisper : pendant qu'il dessine sur la
 tablette, la personne se tait parfois 20 s. Whisper invente alors des phrases
@@ -28,6 +31,13 @@ calage, et le proxy garde le format de l'outil (camera a gauche, noir a droite).
 Les prises sont alors numerotees 1, 2, 3... dans l'ordre des fichiers.
 --lot prefixe le nom des reels (et de leurs fichiers de reglages), --sortie
 donne le dossier d'export (voir REELS_SORTIE dans scripts/reglages.py).
+
+--mixer-son : les deux micros sont melanges dans un .mix.wav, utilise par le
+proxy, par la transcription et par les deux moteurs de rendu. Les rushes ne
+sont pas modifies.
+
+--deja-synchronisees : pas de mesure de calage, decalage impose a 0. Pour des
+cameras declenchees ensemble ou deja calees au montage.
 
 --retourner-ecran : la camera de la tablette a filme a l'envers. L'image est
 tournee de 180 degres dans le proxy, et le reglage est note dans reels.json
@@ -309,15 +319,27 @@ def main():
     dossier_ecran = None if seul else Path(args.ecran).resolve()
     if seul and args.mixer_son:
         parser.error("--mixer-son nécessite deux caméras")
+    for role, dossier in (("face cam", dossier_cam), ("ecran", dossier_ecran)):
+        if dossier is not None and not dossier.is_dir():
+            parser.error(f"le dossier {role} n'existe pas ou n'est pas un dossier : {dossier}")
     retourner, voulus = args.retourner_ecran, args.numeros
     depot = DEPOT / args.lot
     depot.mkdir(parents=True, exist_ok=True)
     manifeste = depot / "reels.json"
-    # Reprendre aussi l'ancien manifeste pour conserver production et cadres.
+    # Premiere preparation de l'ancien lot a plat : on reprend son manifeste
+    # pour conserver production, cadres et sortie. Mais ses prises designent
+    # des fichiers restes dans le dossier des lots, pas dans le sous-dossier
+    # du lot : celles qu'on ne refait pas ici deviendraient introuvables.
     ancien_manifeste = DEPOT / "reels.json"
-    source = manifeste if manifeste.exists() else ancien_manifeste if args.lot == "reels" else manifeste
+    migration = args.lot == "reels" and not manifeste.exists() and ancien_manifeste.exists()
+    if migration and voulus:
+        parser.error("premiere preparation de l'ancien lot : lance-la sans filtre de "
+                     "numeros, sinon les prises non refaites resteraient introuvables")
+    source = ancien_manifeste if migration else manifeste
     lot = json.loads(source.read_text()) if source.exists() else {"reels": []}
-    lot["lot"] = args.lot
+    # le nom affiche appartient au lot : --lot vaut "reels" par defaut et
+    # l'ecrasait a chaque preparation, y compris dans le nom de chaque reel
+    lot.setdefault("lot", args.lot)
     if args.sortie:
         lot["sortie"] = args.sortie
     par_id = {str(r["id"]): r for r in lot["reels"]}
@@ -330,7 +352,10 @@ def main():
     for rang, camera in enumerate(sorted(p for p in dossier_cam.iterdir() if p.suffix.lower() == ".mp4"), 1):
         n = str(rang) if seul else camera.stem
         ecran = None if seul else dossier_ecran / camera.name
-        if (ecran is not None and not ecran.exists()) or (voulus and n not in voulus):
+        if voulus and n not in voulus:
+            continue
+        if ecran is not None and not ecran.exists():
+            print(f"[{n}] passe : pas de fichier ecran {ecran.name}", flush=True)
             continue
         if n not in par_id:
             par_id[n] = {"id": n}
@@ -345,23 +370,33 @@ def main():
             d, conf = caler.decalage(str(camera), str(ecran))
             r["decalage"], r["confiance_calage"] = round(d, 3), round(conf, 3)
         if not seul:
-            print(f"[{n}] decalage ecran {r['decalage']:+.3f} s "
-                  f"(correlation {r['confiance_calage']})", flush=True)
+            # confiance_calage manque quand le decalage vient du manifeste,
+            # pose a la main : le lire sans garde faisait planter la preparation
+            conf = r.get("confiance_calage")
+            mesure = f"correlation {conf}" if conf is not None else (
+                "deja synchronisees" if args.deja_synchronisees else "decalage impose")
+            print(f"[{n}] decalage ecran {r['decalage']:+.3f} s ({mesure})", flush=True)
         manifeste.write_text(json.dumps(lot, ensure_ascii=False, indent=1), encoding="utf-8")
 
-        audio = depot / f"{n}.mix.wav" if args.mixer_son else None
-        if audio:
-            mixer_son(camera, ecran, r["decalage"], audio)
-            r["audio"] = str(audio.resolve())
-        else:
-            r.pop("audio", None)
-        # Les options et le calage changent aussi le proxy et la transcription.
+        # Les options et le calage changent le mix, le proxy et la transcription.
         signature = [str(camera), camera.stat().st_mtime_ns,
                      str(ecran), ecran.stat().st_mtime_ns if ecran else None,
                      r["decalage"], retourner, args.mixer_son]
-        if r.get("preparation") != signature:
+        a_change = r.get("preparation") != signature
+        if a_change:
             for suffixe in ("mp4", "wav", "mots.json"):
                 (depot / f"{n}.{suffixe}").unlink(missing_ok=True)
+        audio = depot / f"{n}.mix.wav" if args.mixer_son else None
+        if audio:
+            # le mix est une etape comme les autres : sans ce test, ajouter une
+            # prise relisait et reencodait le son des dix autres
+            if a_change or not audio.exists():
+                mixer_son(camera, ecran, r["decalage"], audio)
+                print(f"[{n}] son des deux micros melange", flush=True)
+            r["audio"] = str(audio.resolve())
+        else:
+            r.pop("audio", None)
+            (depot / f"{n}.mix.wav").unlink(missing_ok=True)
         fichier_proxy = depot / f"{n}.mp4"
         if seul:
             if not fichier_proxy.exists():
@@ -403,6 +438,9 @@ def main():
 
     lot["reels"].sort(key=lambda r: (len(str(r["id"])), str(r["id"])))
     manifeste.write_text(json.dumps(lot, ensure_ascii=False, indent=1), encoding="utf-8")
+    absents = [str(r["id"]) for r in lot["reels"] if not (depot / f"{r['id']}.mp4").exists()]
+    if absents:
+        print("Sans proxy dans ce lot, a repreparer : " + ", ".join(absents), flush=True)
     print("TERMINE")
 
 
