@@ -169,6 +169,25 @@ class ServeurLocal(unittest.TestCase):
     def test_format_inconnu_refuse(self):
         self.assertEqual(self.envoyer('P1-03', 'Podcast', 'vertical-maison')[0], 400)
 
+    def test_formes_malformees_refusees(self):
+        """Audit GPT-6, constat 4 : sur {"etalonnages": ["x"]}, .items() levait une
+        AttributeError hors de tout filet — le serveur coupait la connexion au lieu
+        de repondre. Un refus doit etre une phrase, pas un socket ferme."""
+        base = {'reel': 'P1-03', 'lot_id': 'Podcast', 'debuts': [0]}
+        for tordu in ({'etalonnages': ['delog']}, {'etalonnages': 'delog'},
+                      {'etalonnages': 7}, {'etalonnages': {'camera': ['delog']}},
+                      {'etalonnages': {'camera': 'inventee'}},
+                      {'etalonnages': {'micro': 'delog'}},
+                      {'etalonnages': {'camera': '../../chez-moi.cube'}},
+                      {'points': 17}, {'debuts': 'tout de suite'}):
+            d = json.dumps(dict(base, **tordu)).encode()
+            code, _, _ = self.requete('/enregistrer', 'POST',
+                                      {'Content-Type': 'application/json'}, d)
+            self.assertEqual(code, 400, f'{tordu} aurait du etre refuse proprement')
+        # et la forme juste passe toujours
+        bon = json.dumps(dict(base, etalonnages={'camera': 'delog'}, points=[])).encode()
+        self.assertEqual(self.requete('/enregistrer', 'POST', {}, bon)[0], 200)
+
     def test_un_export_fini_survit_au_redemarrage(self):
         """ETATS vit en memoire. Sans l'issue posee a cote du journal, la colonne
         de suivi rouvrait un export reussi en « rate » apres un redemarrage."""

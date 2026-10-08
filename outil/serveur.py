@@ -254,10 +254,22 @@ class H(SimpleHTTPRequestHandler):
             return self.send_error(400)
         # l'etalonnage n'arrive jamais comme un chemin, seulement comme une
         # cle de la table : un nom de .cube venu du reseau n'a rien a faire
-        # dans une ligne de commande ffmpeg
-        for source, cle in (d.get("etalonnages") or {}).items():
-            if source not in ("camera", "ecran") or cle not in etalonnage.ETALONNAGES:
+        # dans une ligne de commande ffmpeg. On verifie d'abord la FORME : sur
+        # {"etalonnages": ["x"]}, .items() levait une AttributeError hors de
+        # tout filet et le serveur coupait la connexion au lieu de repondre 400.
+        etals = d.get("etalonnages")
+        if etals is not None and not isinstance(etals, dict):
+            return self.send_error(400, "Étalonnages : objet attendu")
+        for source, cle in (etals or {}).items():
+            if source not in ("camera", "ecran") or not isinstance(cle, str) \
+                    or cle not in etalonnage.ETALONNAGES:
                 return self.send_error(400, "Étalonnage inconnu")
+        # meme raison : la page compte ses points pour le journal, et un
+        # "points": 17 venu du reseau cassait la reponse plutot que la refuser
+        if not isinstance(d.get("points", []), list):
+            return self.send_error(400, "Points : liste attendue")
+        if "debuts" in d and not isinstance(d["debuts"], list):
+            return self.send_error(400, "Débuts : liste attendue")
         if d.get("titre_position") not in (None, "haut", "milieu", "aucun"):
             return self.send_error(400, "Position de titre inconnue")
         DEPOT.mkdir(parents=True, exist_ok=True)
