@@ -90,6 +90,16 @@ main,body.reels main{flex:1;min-height:0;height:auto;grid-template-columns:minma
 .stage canvas{width:100%;height:auto}
 @media(max-width:1050px){main,body.reels main{grid-template-columns:minmax(220px,1fr) minmax(150px,.65fr) 230px}header{gap:8px;flex-wrap:wrap}}
 @media(max-width:760px){body{overflow:auto;height:auto;min-height:100dvh}main,body.reels main{grid-template-columns:1fr 1fr;min-height:520px}.sources{height:360px}aside{grid-column:1/-1}.preview{height:360px}}
+
+.cmd{flex-wrap:wrap;align-items:stretch;gap:10px}
+.groupe{display:flex;align-items:center;gap:5px;flex-wrap:wrap;border-right:1px solid var(--bord);padding-right:10px}
+.groupe>span:first-child{flex-basis:100%;font-size:10px;color:#aaa}
+.groupe button{padding:6px 9px}.navigation{margin-left:auto;border:0}
+.timeline{overflow-x:auto;overflow-y:hidden}.rail{height:64px;margin-bottom:4px}
+.mot{top:24px;color:#eee;z-index:2}.mk{z-index:3}.tete{z-index:5}
+.deb{cursor:ew-resize}.deb::before{content:'';position:absolute;inset:0 -6px}
+.zoom{display:flex;align-items:center;gap:8px;font-size:11px;color:#aaa}
+.zoom input{width:130px}
 </style></head><body>
 
 <header>
@@ -138,22 +148,24 @@ main,body.reels main{flex:1;min-height:0;height:auto;grid-template-columns:minma
 
 <video id="vid" src="proxy.mp4" playsinline preload="auto" style="position:fixed;left:-4px;top:-4px;width:2px;height:2px;opacity:.01;pointer-events:none"></video>
 <div class="piste">
-  <div class="rail" id="rail"><div class="tete" id="tete"></div></div>
-  <div class="mini reel-seul" id="mini" title="Zoom sur le debut : glisse un marqueur vert pour regler un debut"><div class="tete" id="teteMini"></div></div>
+  <label class="zoom">Zoom de la piste <input id="zoom" type="range" min="1" max="12" value="1" step="1"></label>
+  <div class="timeline"><div class="rail" id="rail"><div class="tete" id="tete"></div></div></div>
   <div class="debuts reel-seul" id="debuts"></div>
   <div class="cmd">
+    <div class="groupe" aria-label="Lecture"><span>Lecture · Espace · ← →</span>
     <button class="act" id="play">Lecture</button>
     <span class="tc" id="tc">00:00.0</span>
     <button class="act g" id="m10">-10s</button><button class="act g" id="m1">-1s</button>
     <button class="act g" id="p1">+1s</button><button class="act g" id="p10">+10s</button>
     <label class="chk reel-seul"><input type="checkbox" id="sauter" checked> Sauter les coupes</label>
-    <span class="sp"></span>
+    </div><div class="groupe" aria-label="Bornes"><span>Bornes · I début · O fin · C couper</span>
     <button class="act v reel-seul" id="debutIci">+ Debut ici</button>
     <button class="act g reel-seul" id="finIci">Fin ici</button>
     <button class="act g reel-seul" id="couperIci" title="Premier clic : debut de la coupe. Second clic : fin.">Couper ici</button>
+    </div><div class="groupe" aria-label="Cadrage"><span>Cadrage · Alt + flèches pour déplacer</span>
     <button class="act" id="ajouter">Poser un cadrage ici</button>
     <button class="act g" id="maj" disabled>Corriger ce point</button>
-    <button class="act g" id="prec">&lt; point precedent</button><button class="act g" id="suiv">point suivant &gt;</button><button class="act" id="reelPrec" style="margin-left:14px">&lsaquo; reel precedent</button><button class="act" id="reelSuiv" style="background:var(--bleu);color:#fff;font-weight:600">Reel suivant &rsaquo;</button>
+    <button class="act g" id="prec">&lt; point precedent</button><button class="act g" id="suiv">point suivant &gt;</button></div><div class="groupe navigation" aria-label="Navigation"><span>Navigation · N suivant</span><button class="act g" id="reelPrec">&lsaquo; reel precedent</button><button class="act" id="reelSuiv" style="background:var(--bleu);color:#fff;font-weight:600">Reel suivant &rsaquo;</button></div>
     
   </div>
 </div>
@@ -246,8 +258,13 @@ for(const k of ['A','B']){
   c.h=c.w/ratio(k);c.x=cx-c.w/2;c.y=cy-c.h/2;clamp(k);boites();garder()},{passive:false});
 }
 addEventListener('keydown',e=>{
- if(e.target.tagName==='TEXTAREA'||e.target.type==='text')return;
+ if(e.target.closest('input,textarea,select,[contenteditable]')||e.ctrlKey||e.metaKey)return;
  if(e.code==='Space'){e.preventDefault();vId('play').click();return}
+ if(!e.altKey){
+  const actions={i:'debutIci',o:'finIci',c:'couperIci',n:'reelSuiv',ArrowLeft:e.shiftKey?'m10':'m1',ArrowRight:e.shiftKey?'p10':'p1'};
+  const id=actions[e.key]||actions[e.key.toLowerCase()];
+  if(id){e.preventDefault();vId(id).click()}return;
+ }
  const pas=e.shiftKey?40:8,c=crop[actif];
  if(e.key==='ArrowLeft')c.x-=pas;else if(e.key==='ArrowRight')c.x+=pas;
  else if(e.key==='ArrowUp')c.y-=pas;else if(e.key==='ArrowDown')c.y+=pas;else return;
@@ -263,9 +280,9 @@ function place(t){vid.currentTime=Math.max(borneA,Math.min(borneB,t));maj()}
 function maj(){const t=vid.currentTime,m=Math.floor(t/60);
  vId('tc').textContent=String(m).padStart(2,'0')+':'+(t-60*m).toFixed(1).padStart(4,'0');
  vId('tete').style.left=((t-borneA)/(borneB-borneA)*100)+'%';
- if(reel){const W=fenetre();vId('teteMini').style.display=t>W?'none':'';vId('teteMini').style.left=(t/W*100)+'%'}}
+}
 vId('rail').addEventListener('pointerdown',e=>{
- if(e.target.classList.contains('mk'))return;
+ if(e.target.closest('.mk,.deb'))return;
  const r=e.currentTarget.getBoundingClientRect();place(borneA+(e.clientX-r.left)/r.width*(borneB-borneA))});
 vId('play').onclick=e=>{joue=!joue;
  if(joue){vid.play().catch(()=>{joue=false;e.target.textContent='Lecture';
@@ -289,7 +306,7 @@ function rail(){
   d.style.left=((pt.t-borneA)/(borneB-borneA)*100)+'%';
   const m=Math.floor(pt.t/60);d.innerHTML=`<span>${m}:${(pt.t-60*m).toFixed(0).padStart(2,'0')}</span>`;
   d.onclick=ev=>{ev.stopPropagation();aller(points.indexOf(pt))};
-  r.appendChild(d)})}
+  r.appendChild(d)});if(reel)mini()}
 function aller(i){sel=i;const p=points[i];
  crop.A={...p.A};crop.B={...p.B};place(p.t);boites();table();rail();vId('maj').disabled=false}
 function table(){
@@ -367,7 +384,7 @@ vId('fmt').addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')return;
 vId('infoFmt').textContent=FORMATS[fmt].nom;
 const selP=vId('passage');
 PASSAGES.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent=p[0];selP.appendChild(o)});
-function changerReel(pas){const i=selP.selectedIndex+pas;if(i<0||i>=selP.options.length)return;selP.selectedIndex=i;selP.onchange()}
+function changerReel(pas){if(chargement)return;const i=selP.selectedIndex+pas;if(i<0||i>=selP.options.length)return;selP.selectedIndex=i;selP.onchange()}
 vId('reelSuiv').onclick=()=>changerReel(1);vId('reelPrec').onclick=()=>changerReel(-1);
 selP.onchange=()=>{
  if(REELS)return chargerReel(selP.value);
@@ -477,7 +494,8 @@ async function chargerReel(id){
  if(LOT.cadres&&!duMien.length&&LOT.cadres[fmt+'_haut'])crop.A={...LOT.cadres[fmt+'_haut']};
  chargement=false;boites();
  vid.src=reel.proxy;vid.load();
- table();rail();mini();chips();maj()}
+ table();rail();mini();chips();maj();
+ vId('reelPrec').disabled=selP.selectedIndex===0;vId('reelSuiv').disabled=selP.selectedIndex===selP.options.length-1;}
 function maj2(){mini();chips();rail();sortie()}
 function railReel(r){
  [...coupes].sort((x,y)=>(x.type==='blanc'?0:1)-(y.type==='blanc'?0:1)).forEach(c=>{const z=document.createElement('div');z.className='cut'+(c.on?'':' off');
@@ -485,14 +503,10 @@ function railReel(r){
   z.title=`${{reprise:'Reprise',manuel:'Coupe manuelle'}[c.type]||'Blanc'} de ${(c.b-c.a).toFixed(2)} s`+
    (c.texte?` : ${c.texte}`:'')+(c.on?' (coupe)':' (garde)')+'. Clic pour inverser.';
   z.addEventListener('pointerdown',ev=>{ev.stopPropagation();c.on=!c.on;maj2()});r.appendChild(z)});
- debuts.forEach((t,i)=>{const k=document.createElement('div');k.className='deb';
-  k.style.left=(t/DUREE*100)+'%';k.style.pointerEvents='none';k.innerHTML=`<span>D${i+1}</span>`;r.appendChild(k)});
  const f=document.createElement('div');f.className='fin';f.style.left=(fin/DUREE*100)+'%';r.appendChild(f)}
 function mini(){
- const m=vId('mini');[...m.querySelectorAll('.mot,.blanc,.deb')].forEach(n=>n.remove());
- const W=fenetre(),px=m.clientWidth;let libre=0;
- for(const c of coupes){if(c.a>W)continue;const z=document.createElement('div');z.className='blanc'+(c.on?'':' off');
-  z.style.left=(c.a/W*100)+'%';z.style.width=((Math.min(c.b,W)-c.a)/W*100)+'%';m.appendChild(z)}
+ const m=vId('rail');[...m.querySelectorAll('.mot,.blanc,.deb')].forEach(n=>n.remove());
+ const W=DUREE,px=m.clientWidth;let libre=0;
  for(const [a,,txt] of mots){if(a>W)break;const x=a/W*px;if(x<libre)continue;
   const s=document.createElement('div');s.className='mot';s.style.left=x+'px';s.textContent=txt;m.appendChild(s);
   libre=x+s.offsetWidth+4}
@@ -507,8 +521,7 @@ function mini(){
    addEventListener('pointermove',bouge);addEventListener('pointerup',lache)});
   m.appendChild(k)});
  maj()}
-vId('mini').addEventListener('pointerdown',e=>{
- const r=e.currentTarget.getBoundingClientRect();place((e.clientX-r.left)/r.width*fenetre())});
+vId('zoom').oninput=()=>{vId('rail').style.width=(100*Number(vId('zoom').value))+'%';rail();maj()};
 function chips(){
  vId('exporter').hidden=debuts.length<2;
  const c=vId('debuts');c.textContent='';
