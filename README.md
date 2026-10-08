@@ -236,3 +236,27 @@ builds de ffmpeg n'ont ni `drawtext` ni `subtitles`.
 ## Licence
 
 MIT. Voir `LICENCE`.
+
+---
+
+## Mode podcast : deux caméras déjà synchronisées, rendu brut
+
+Pour des pistes Riverside (ou toute paire déjà alignée) qu'on veut juste couper et
+cadrer, sans sous-titres ni habillage :
+
+1. Découper chaque passage dans les deux pistes, avec la même durée et le même nom
+   `.MP4` dans deux dossiers. Mixer les deux micros dans la piste du haut, sinon
+   la voix de l'invité est muette.
+2. Écrire `lots/reels.json` avec `"decalage": 0.0` pour chaque reel (les pistes sont
+   déjà calées), puis lancer `preparer-reels.py <dossier haut> <dossier bas> --lot X --sortie X`.
+3. Ajouter au manifeste :
+   - `"formats": ["vmc"]`
+   - `"cadres": {"vmc_haut": {...}, "vmc": {...}}` pour le cadre fixe par défaut
+   - `"production": {"script": "produire-split.py", "sortie": "<dossier>"}`
+4. `python3 outil/serveur.py`, puis ouvrir `http://localhost:8765/outil/index.html?lot=reels`.
+   Le lien `outil/reels -> ../lots` doit exister (`ln -s ../lots outil/reels`).
+5. Régler le départ, la fin et les coupes, puis **Enregistrer le cadrage** : le reel est rendu
+   par `scripts/produire-split.py` et déposé dans le dossier de sortie. Le bouton « Reel suivant »
+   passe au suivant.
+
+Les améliorations prévues sont décrites dans `docs/BRIEF-REFONTE-UX.md`.

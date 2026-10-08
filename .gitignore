@@ -17,3 +17,7 @@ outils/reperer-visage
 __pycache__/
 *.pyc
 .DS_Store
+
+# Donnees locales d un chantier : sources decoupees et lien vers le lot.
+sources/
+outil/reels

@@ -150,7 +150,7 @@ input.txt{width:100%;background:#141417;color:#eee;border:1px solid var(--bord);
     <button class="act g reel-seul" id="couperIci" title="Premier clic : debut de la coupe. Second clic : fin.">Couper ici</button>
     <button class="act" id="ajouter">Poser un cadrage ici</button>
     <button class="act g" id="maj" disabled>Corriger ce point</button>
-    <button class="act g" id="prec">&lt; point precedent</button><button class="act g" id="suiv">point suivant &gt;</button>
+    <button class="act g" id="prec">&lt; point precedent</button><button class="act g" id="suiv">point suivant &gt;</button><button class="act" id="reelPrec" style="margin-left:14px">&lsaquo; reel precedent</button><button class="act" id="reelSuiv" style="background:var(--bleu);color:#fff;font-weight:600">Reel suivant &rsaquo;</button>
     
   </div>
 </div>
@@ -363,6 +363,8 @@ vId('fmt').addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')return;
 vId('infoFmt').textContent=FORMATS[fmt].nom;
 const selP=vId('passage');
 PASSAGES.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent=p[0];selP.appendChild(o)});
+function changerReel(pas){const i=selP.selectedIndex+pas;if(i<0||i>=selP.options.length)return;selP.selectedIndex=i;selP.onchange()}
+vId('reelSuiv').onclick=()=>changerReel(1);vId('reelPrec').onclick=()=>changerReel(-1);
 selP.onchange=()=>{
  if(REELS)return chargerReel(selP.value);
  if(selP.value===''){borneA=0;borneB=DUREE}
@@ -462,6 +464,7 @@ async function chargerReel(id){
  else if(e.cadre){crop.A={...e.cadre.A};crop.B={...e.cadre.B};
   if(!!e.retourne!==!!reel.retourner_ecran){crop.B.x=SRC_W-crop.B.x-crop.B.w;crop.B.y=SRC_H-crop.B.y-crop.B.h}}
  if(LOT.cadres&&!duMien.length&&LOT.cadres[fmt])crop.B={...LOT.cadres[fmt]};
+ if(LOT.cadres&&!duMien.length&&LOT.cadres[fmt+'_haut'])crop.A={...LOT.cadres[fmt+'_haut']};
  chargement=false;boites();
  vid.src=reel.proxy;vid.load();
  table();rail();mini();chips();maj()}
@@ -546,7 +549,7 @@ fetch(LOTP+'/reels.json?'+Date.now()).then(r=>r.ok?r.json():null).then(j=>{
   [...vId('fmt').children].forEach(b=>b.style.display=j.formats.includes(b.dataset.f)?'block':'none');
   // libelles du mode deux cameras : inutiles sur un lot a une camera
   if(REELS[0].ecran){const t=document.querySelectorAll('.src h2');
-   t[0].firstChild.nodeValue='Haut — suivi automatique ';t[1].firstChild.nodeValue='Bas — cadre a regler '}
+   t[0].firstChild.nodeValue=(LOT.cadres?'Haut — cadre fixe ':'Haut — suivi automatique ');t[1].firstChild.nodeValue='Bas — cadre a regler '}
   choisirFormat(j.formats[0])}
  if(REELS.every(r=>!r.ecran)){document.body.classList.add('solo');choisirFormat('hsolo')}
  REELS.forEach(r=>{const o=document.createElement('option');o.value=r.id;

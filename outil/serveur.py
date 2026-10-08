@@ -40,9 +40,15 @@ def ouvrier():
     while True:
         nom, fichier = FILE.get()
         ETATS[nom] = "cours"
+        # un lot peut demander un rendu brut sans habillage, deposant le reel dans
+        # un dossier : "production": {"script": "produire-split.py", "sortie": "..."}
+        manifeste = Path(reglages.LOTS) / "reels.json"
+        prod = json.loads(manifeste.read_text(encoding="utf-8")).get("production") \
+            if manifeste.exists() else None
+        cmd = [sys.executable, "-u", str(RACINE.parent / "scripts" / prod["script"]),
+               str(fichier), prod["sortie"]] if prod else [sys.executable, "-u", str(RENDU), str(fichier)]
         with open(DEPOT / f"{nom}.log", "w", encoding="utf-8") as journal:
-            code = subprocess.run([sys.executable, "-u", str(RENDU), str(fichier)],
-                                  stdout=journal, stderr=subprocess.STDOUT).returncode
+            code = subprocess.run(cmd, stdout=journal, stderr=subprocess.STDOUT).returncode
         ETATS[nom] = code
         print(f"[{datetime.now():%H:%M:%S}] export {'ok' if code == 0 else 'ECHEC'} : {nom}",
               flush=True)
@@ -56,7 +62,18 @@ class H(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(donnees, ensure_ascii=False).encode())
 
+    def hote_local(self):
+        """Refuse les requetes d'un autre site (DNS rebinding) : le serveur rend
+        des fichiers et lance des exports, il ne doit repondre qu'a localhost."""
+        hote = (self.headers.get("Host") or "").rsplit(":", 1)[0]
+        if hote in ("localhost", "127.0.0.1"):
+            return True
+        self.send_error(403)
+        return False
+
     def do_POST(self):
+        if not self.hote_local():
+            return
         if self.path not in ("/enregistrer", "/exporter"):
             return self.send_error(404)
         n = int(self.headers.get("Content-Length", 0))
@@ -94,6 +111,8 @@ class H(SimpleHTTPRequestHandler):
         self.repondre({"ok": True, "nom": nom, "fichier": f"{nom}.json (export en file)"})
 
     def do_GET(self):
+        if not self.hote_local():
+            return
         url = urlparse(self.path)
         if url.path != "/export-etat":
             return super().do_GET()
@@ -163,7 +182,7 @@ class H(SimpleHTTPRequestHandler):
     def end_headers(self):
         # la page et les manifestes changent souvent : jamais de version gardee en cache
         chemin = urlparse(self.path).path
-        if chemin in ("/", "/index.html") or chemin.endswith(".json"):
+        if chemin == "/" or chemin.endswith((".html", ".json")):
             self.send_header("Cache-Control", "no-store")
         if not self.path.endswith(".json"):
             self.send_header("Accept-Ranges", "bytes")
