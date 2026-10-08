@@ -81,6 +81,15 @@ button.act.v{background:#1f7a45}
 body.reels .reel-seul{display:flex}
 body.reels .mini.reel-seul{display:block}
 input.txt{width:100%;background:#141417;color:#eee;border:1px solid var(--bord);border-radius:5px;padding:6px 8px;font-size:12px}
+
+body{height:100dvh;display:flex;flex-direction:column}
+main,body.reels main{flex:1;min-height:0;height:auto;grid-template-columns:minmax(260px,1fr) minmax(180px,.65fr) 270px}
+.preview{min-height:0;display:flex;flex-direction:column;align-items:center;gap:8px}
+.preview h2{font-size:11px;color:#aaa;margin:0}
+#apercu{min-height:0;flex:1;max-height:none;width:100%;object-fit:contain}
+.stage canvas{width:100%;height:auto}
+@media(max-width:1050px){main,body.reels main{grid-template-columns:minmax(220px,1fr) minmax(150px,.65fr) 230px}header{gap:8px;flex-wrap:wrap}}
+@media(max-width:760px){body{overflow:auto;height:auto;min-height:100dvh}main,body.reels main{grid-template-columns:1fr 1fr;min-height:520px}.sources{height:360px}aside{grid-column:1/-1}.preview{height:360px}}
 </style></head><body>
 
 <header>
@@ -113,8 +122,8 @@ input.txt{width:100%;background:#141417;color:#eee;border:1px solid var(--bord);
       <div class="stage"><div class="wrap" id="wB"><canvas id="miroirB" width="640" height="360"></canvas>
         <div class="box" id="bB"><i class="nw"></i><i class="ne"></i><i class="sw"></i><i class="se"></i></div></div></div></div>
   </div>
+  <section class="preview"><h2>Aperçu du rendu</h2><canvas id="apercu"></canvas></section>
   <aside>
-    <h2>Apercu</h2><canvas id="apercu"></canvas>
     <h2 style="margin-top:12px">Cadrages poses <span class="val" id="nbPts"></span></h2>
     <table><tbody id="pts"></tbody></table>
     <button class="act g" title="Le cadrage tient jusqu’au point suivant. Coche glisse pour interpoler. Clique un point pour le sélectionner, puis Corriger ce point pour le modifier." aria-label="Aide sur les cadrages">?</button>
@@ -375,11 +384,17 @@ function reflets(){
  requestAnimationFrame(reflets)}
 let boucles=false;
 vid.addEventListener('loadeddata',()=>{
- vId('wA').style.width=vId('wB').style.width='100%';
+ dimensionnerSources();
  if(reel)place(debuts[0]||0);
  boites();table();rail();if(reel){mini();chips()}
  if(!boucles){boucles=true;apercu();reflets()}});
-addEventListener('resize',()=>{boites();if(reel)mini()});
+function dimensionnerSources(){
+ for(const id of ['wA','wB']){const w=vId(id),stage=w.parentElement;
+  w.style.width=Math.max(0,Math.min(stage.clientWidth,stage.clientHeight*16/9))+'px'}
+ boites();
+}
+new ResizeObserver(dimensionnerSources).observe(document.querySelector('.sources'));
+addEventListener('resize',()=>{dimensionnerSources();if(reel)mini()});
 
 // ---- Reels : une prise = un proxy, plusieurs debuts, coupes proposees ----
 // reels/reels.json liste les prises (scripts/preparer-reels.py). Chaque prise a
