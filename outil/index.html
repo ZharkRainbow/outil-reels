@@ -710,7 +710,13 @@ function recapitule(){
  vId('recapListe').innerHTML=lignes.map(([k,v,fort])=>
   `<dt>${k}</dt><dd class="${fort?'fort':''}">${v}</dd>`).join('')}
 vId('debutIci').onclick=()=>{if(!reel)return;
- debuts.push(caler(vid.currentTime));debuts.sort((a,b)=>a-b);maj2()};
+ // caler() ramene le depart sur la reprise de parole la plus proche : deux
+ // appuis voisins tombaient au meme endroit et le rendu encodait deux fois
+ // le meme fichier, sous deux noms
+ const t=caler(vid.currentTime);
+ if(debuts.some(d=>Math.abs(d-t)<0.08))
+  return poserEtat(`Un départ est déjà posé à ${hms(t)}.`,'');
+ debuts.push(t);debuts.sort((a,b)=>a-b);maj2()};
 vId('finIci').onclick=()=>{if(!reel)return;const t=vid.currentTime;let ecart=.4;fin=t;
  for(const [,b] of mots){if(Math.abs(t-b)<ecart){ecart=Math.abs(t-b);fin=Math.min(DUREE,b+.06)}}maj2()};
 // coupe a la main : les bords se posent dans le blanc le plus proche s'il y en a un
