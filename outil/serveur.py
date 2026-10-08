@@ -37,29 +37,58 @@ ETATS = {}            # nom -> "attente", "cours", ou code de sortie du rendu
 
 
 def ouvrier():
+    """Un seul export a la fois. Quoi qu'il arrive, la boucle survit : si ce
+    thread meurt, la file se bloque sans que rien ne l'annonce a l'ecran."""
     while True:
         nom, fichier = FILE.get()
-        ETATS[nom] = "cours"
-        # un lot peut demander un rendu brut sans habillage, deposant le reel dans
-        # un dossier : "production": {"script": "produire-split.py", "sortie": "..."}
+        code = 1
         try:
-            d = json.loads(fichier.read_text(encoding="utf-8"))
-            manifeste = manifeste_lot(d.get("lot_id", "reels"))
-            prod = json.loads(manifeste.read_text(encoding="utf-8")).get("production") if manifeste.exists() else None
-            if prod and prod["script"] != "produire-split.py":
-                raise ValueError("Script de production non autorisé")
-            cmd = [sys.executable, "-u", str(RACINE.parent / "scripts" / prod["script"]),
-                   str(fichier), prod["sortie"]] if prod else [sys.executable, "-u", str(RENDU), str(fichier)]
-            with open(DEPOT / f"{nom}.log", "w", encoding="utf-8") as journal:
-                code = subprocess.run(cmd, stdout=journal, stderr=subprocess.STDOUT).returncode
+            ETATS[nom] = "cours"
+            code = lancer_export(nom, fichier)
         except Exception as exc:
-            code = 1
-            (DEPOT / f"{nom}.log").write_text(str(exc), encoding="utf-8")
+            try:
+                (DEPOT / f"{nom}.log").write_text(str(exc), encoding="utf-8")
+            except OSError:
+                pass
+            print(f"[{datetime.now():%H:%M:%S}] export impossible : {nom} : {exc}", flush=True)
         finally:
+            ETATS[nom] = code
             FILE.task_done()
-        ETATS[nom] = code
         print(f"[{datetime.now():%H:%M:%S}] export {'ok' if code == 0 else 'ECHEC'} : {nom}",
               flush=True)
+
+
+def lancer_export(nom, fichier):
+    # un lot peut demander un rendu brut sans habillage, deposant le reel dans
+    # un dossier : "production": {"script": "produire-split.py", "sortie": "..."}
+    d = json.loads(fichier.read_text(encoding="utf-8"))
+    manifeste = manifeste_lot(d.get("lot_id", "reels"))
+    prod = json.loads(manifeste.read_text(encoding="utf-8")).get("production") if manifeste.exists() else None
+    if prod is not None:
+        if not isinstance(prod, dict) or prod.get("script") != "produire-split.py":
+            raise ValueError("Script de production non autorisé")
+        cmd = [sys.executable, "-u", str(RACINE.parent / "scripts" / prod["script"]),
+               str(fichier), str(prod.get("sortie") or "")]
+    else:
+        cmd = [sys.executable, "-u", str(RENDU), str(fichier)]
+    with open(DEPOT / f"{nom}.log", "w", encoding="utf-8") as journal:
+        return subprocess.run(cmd, stdout=journal, stderr=subprocess.STDOUT).returncode
+
+
+# Champs que le rendu transforme en chemins ou en decalages. Ils ne doivent
+# jamais venir du corps de la requete : une page tierce pourrait y glisser
+# "/etc/shadow" ou une URL distante, que ffmpeg ouvrirait sans discuter.
+CHAMPS_DU_LOT = ("camera", "ecran", "audio", "decalage", "retourner_ecran", "base", "public")
+
+
+def fiche_du_lot(lot_id, reel_id):
+    """Manifeste du lot et fiche du reel demande, lus sur le disque."""
+    manifeste = manifeste_lot(lot_id)
+    lot = json.loads(manifeste.read_text(encoding="utf-8"))
+    for fiche in lot.get("reels", []):
+        if str(fiche.get("id")) == str(reel_id):
+            return lot, fiche
+    return lot, None
 
 
 def manifeste_lot(nom):
@@ -83,8 +112,12 @@ class H(SimpleHTTPRequestHandler):
             try:
                 nom, relatif = url[len("/lots/"):].split("/", 1)
                 base = manifeste_lot(nom).parent.resolve()
+                # l'ancien lot pose ses fichiers a plat dans LOTS, a cote des
+                # autres lots : sans ca, /lots/reels/<autre lot>/ les servirait
+                if base == Path(reglages.LOTS).resolve() and "/" in relatif:
+                    raise ValueError("Chemin hors du lot")
                 cible = (base / relatif).resolve()
-                if not cible.is_relative_to(base):
+                if not cible.is_relative_to(base) or cible.is_dir():
                     raise ValueError("Chemin hors du lot")
                 return str(cible)
             except ValueError:
@@ -107,12 +140,26 @@ class H(SimpleHTTPRequestHandler):
         self.send_error(403)
         return False
 
+    def meme_origine(self):
+        """Refuse une requete fabriquee par un autre site. Le controle du Host
+        arrete le DNS rebinding ; celui-ci arrete la CSRF ordinaire, qui passe
+        sans pre-vol CORS avec un Content-Type simple."""
+        # on se compare au Host, deja restreint a localhost : le port peut
+        # changer (REELS_PORT, second serveur de test) sans casser l'envoi
+        attendues = {f"http://{self.headers.get('Host')}"}
+        origine = self.headers.get("Origin")
+        depuis = self.headers.get("Sec-Fetch-Site")
+        if (origine and origine not in attendues) or (depuis and depuis != "same-origin"):
+            self.send_error(403)
+            return False
+        return True
+
     def do_HEAD(self):
         if self.hote_local():
             super().do_HEAD()
 
     def do_POST(self):
-        if not self.hote_local():
+        if not self.hote_local() or not self.meme_origine():
             return
         if self.path not in ("/enregistrer", "/exporter"):
             return self.send_error(404)
@@ -126,12 +173,24 @@ class H(SimpleHTTPRequestHandler):
         DEPOT.mkdir(parents=True, exist_ok=True)
         reel = "reel" in d and "debuts" in d
         if reel:
+            # on reprend du manifeste tout ce qui devient un chemin a l'export
+            try:
+                lot, fiche = fiche_du_lot(d.get("lot_id") or "reels", d["reel"])
+            except (ValueError, OSError, json.JSONDecodeError):
+                return self.send_error(400, "Lot introuvable")
+            if fiche is None:
+                return self.send_error(400, "Reel absent du manifeste")
+            for cle in CHAMPS_DU_LOT:
+                d.pop(cle, None)
+                if cle in fiche:
+                    d[cle] = fiche[cle]
+            d["lot"], d["sortie"], d["rendu"] = lot.get("lot"), lot.get("sortie"), lot.get("rendu")
             # le nom porte le format, quelle que soit la version de la page qui envoie :
             # sinon le vertical et l'horizontal d'un meme reel s'ecrasent
             format_ = {"vmc": "vertical", "hmc": "horizontal", "hsolo": "horizontal",
-                       "carre": "carre"}.get(d.get("format"), d.get("format"))
+                       "carre": "carre"}.get(d.get("format")) or d.get("format") or "vertical"
             d["passage"] = f"{d.get('lot_id') or d.get('lot') or 'Reel'} {d['reel']} - {format_}"
-        nom = (d.get("passage") or "sans-passage").replace("/", "-")[:60]
+        nom = str(d.get("passage") or "sans-passage").replace("/", "-")[:60]
         nom = re.sub(r'[\\/:\x00-\x1f]', '-', nom)
         if ETATS.get(nom) in ("attente", "cours"):
             return self.repondre({"ok": False, "erreur": "cet export est déjà dans la file"}, 409)
@@ -182,8 +241,12 @@ class H(SimpleHTTPRequestHandler):
             en_cours = sum(1 for e in ETATS.values() if e == "cours")
             return self.repondre({"texte": f"{nom} : en file d'attente, {devant + en_cours} export(s) avant",
                                   "fini": False})
-        lignes = [l for l in journal.read_text(encoding="utf-8").splitlines() if l.strip()] \
-            if journal.exists() else []
+        # ffmpeg et whisper ecrivent directement dans ce journal : il peut
+        # contenir des octets qui ne sont pas de l'UTF-8.
+        lignes = [l for l in journal.read_text(encoding="utf-8", errors="replace").splitlines()
+                  if l.strip()] if journal.exists() else []
+        if etat is None and not lignes:
+            return self.repondre({"texte": f"Export inconnu : {nom}", "fini": True, "ok": False})
         texte = lignes[-1] if lignes else "Export en préparation..."
         if etat == "cours":
             texte = f"En cours — {nom} : {texte}"
@@ -200,21 +263,23 @@ class H(SimpleHTTPRequestHandler):
         if os.path.isdir(chemin):
             return super().send_head()
         plage = self.headers.get("Range")
+        self._reste = None
         if not plage:
-            self.send_header_accept_ranges = True
-            f = super().send_head()
-            return f
+            return super().send_head()
         m = re.match(r"bytes=(\d*)-(\d*)", plage)
         if not m or not os.path.isfile(chemin):
             return super().send_head()
 
         taille = os.path.getsize(chemin)
-        debut = int(m.group(1)) if m.group(1) else 0
-        fin = int(m.group(2)) if m.group(2) else taille - 1
-        fin = min(fin, taille - 1)
-        if debut > fin:
+        if m.group(1):
+            debut = int(m.group(1))
+            fin = min(int(m.group(2)), taille - 1) if m.group(2) else taille - 1
+        else:   # "bytes=-500" : les 500 derniers octets
+            debut, fin = max(0, taille - int(m.group(2) or 0)), taille - 1
+        if debut > fin or debut >= taille:
             self.send_response(416)
             self.send_header("Content-Range", f"bytes */{taille}")
+            self.send_header("Content-Length", "0")
             self.end_headers()
             return None
 

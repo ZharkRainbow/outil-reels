@@ -25,7 +25,10 @@ class ServeurLocal(unittest.TestCase):
         self.racine = Path(self.tmp.name)
         self.lots = self.racine / 'lots'
         (self.lots / 'Podcast').mkdir(parents=True)
-        (self.lots / 'Podcast' / 'reels.json').write_text('{"lot":"Podcast"}')
+        (self.lots / 'Podcast' / 'reels.json').write_text(json.dumps(
+            {'lot': 'Podcast', 'rendu': False, 'sortie': 'Vertical',
+             'reels': [{'id': 'P1-03', 'camera': 'lots/Podcast/haut.mp4',
+                        'ecran': 'lots/Podcast/bas.mp4', 'decalage': 0.5}]}))
         (self.lots / 'Podcast' / 'proxy.mp4').write_bytes(bytes(range(256)))
         self.modifs = [patch.object(serveur.reglages, 'LOTS', self.lots),
                        patch.object(serveur, 'DEPOT', self.racine / 'cadrages')]
@@ -76,6 +79,8 @@ class ServeurLocal(unittest.TestCase):
     def test_lot_historique_et_liste(self):
         (self.lots / 'reels.json').write_text('{"lot":"Ancien"}')
         self.assertEqual(json.loads(self.requete('/lots/reels/reels.json')[2])['lot'], 'Ancien')
+        # sans quoi /lots/reels/<autre lot>/ servirait tous les lots du serveur
+        self.assertEqual(self.requete('/lots/reels/Podcast/reels.json')[0], 404)
         self.assertEqual({lot['id'] for lot in json.loads(self.requete('/lots')[2])},
                          {'exemple', 'Podcast', 'reels'})
 
@@ -89,6 +94,39 @@ class ServeurLocal(unittest.TestCase):
         self.assertTrue(reponse['garde'])
         sauve = json.loads((serveur.DEPOT / reponse['fichier']).read_text())
         self.assertEqual(sauve['reel'], 'P1-03')
+
+    def test_chemins_repris_du_manifeste(self):
+        """Le corps de la requete ne doit pas pouvoir designer les fichiers :
+        c'est ffmpeg qui les ouvrirait, et le rendu qui ecrirait la sortie."""
+        d = {'reel': 'P1-03', 'lot_id': 'Podcast', 'format': 'vmc', 'debuts': [0],
+             'points': [], 'rendu': False, 'camera': '/etc/passwd',
+             'audio': 'http://ailleurs.example/a.wav', 'sortie': '../../ailleurs',
+             'decalage': 99}
+        code, _, contenu = self.requete('/enregistrer', 'POST',
+                                        {'Content-Type': 'application/json'}, json.dumps(d).encode())
+        self.assertEqual(code, 200)
+        sauve = json.loads((serveur.DEPOT / json.loads(contenu)['fichier']).read_text())
+        self.assertEqual(sauve['camera'], 'lots/Podcast/haut.mp4')
+        self.assertEqual(sauve['decalage'], 0.5)
+        self.assertEqual(sauve['sortie'], 'Vertical')
+        self.assertNotIn('audio', sauve)
+        for inconnu in ({'reel': 'absent', 'lot_id': 'Podcast', 'debuts': [0]},
+                        {'reel': 'P1-03', 'lot_id': 'Fantome', 'debuts': [0]}):
+            self.assertEqual(self.requete('/enregistrer', 'POST', {}, json.dumps(inconnu).encode())[0], 400)
+
+    def test_post_d_un_autre_site_refuse(self):
+        d = json.dumps({'reel': 'P1-03', 'lot_id': 'Podcast', 'debuts': [0]}).encode()
+        for entetes in ({'Origin': 'http://evil.example'}, {'Sec-Fetch-Site': 'cross-site'}):
+            self.assertEqual(self.requete('/enregistrer', 'POST', entetes, d)[0], 403)
+        self.assertEqual(self.requete('/enregistrer', 'POST',
+                                      {'Origin': f'http://127.0.0.1:{self.http.server_port}',
+                                       'Sec-Fetch-Site': 'same-origin'}, d)[0], 200)
+
+    def test_passage_non_textuel_et_dossier(self):
+        d = json.dumps({'passage': 123, 'reel': 'P1-03', 'lot_id': 'Podcast', 'debuts': [0]}).encode()
+        self.assertEqual(self.requete('/enregistrer', 'POST', {}, d)[0], 200)
+        self.assertEqual(self.requete('/lots/Podcast/')[0], 404)
+        self.assertEqual(json.loads(self.requete('/export-etat?nom=jamais-vu')[2])['ok'], False)
 
 
 class NomsDuRendu(unittest.TestCase):
