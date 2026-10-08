@@ -70,6 +70,10 @@ FPS = 25
 SEUIL_BLANC = -37.0      # dBFS RMS : voix vers -20, plancher de bruit vers -57
 BLANC_MIN = 0.25          # en dessous, c'est une respiration de phrase
 BLANC_COUPE = 0.45        # un blanc plus long est resserre...
+# Depuis la V3, la page ne lit plus les blancs ecrits ici : elle les recalcule
+# a partir de "blancs" (toute pause >= BLANC_MIN) selon le reglage Leger /
+# Normal / Serre, c'est-a-dire 0,50 / 0,35 / 0,25 s. BLANC_COUPE ne sert donc
+# plus qu'au JSON ecrit sur le disque, que d'autres outils peuvent relire.
 PAUSE_AVANT = 0.12        # ... en gardant 0,12 s apres la fin du son
 PAUSE_APRES = 0.10        # ... et 0,10 s avant la reprise de parole
 FORME_PAR_SECONDE = 50   # points de forme d'onde par seconde dessines sur la piste

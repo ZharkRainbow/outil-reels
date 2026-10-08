@@ -91,7 +91,48 @@ main{flex:1;min-height:0;display:grid;gap:12px;padding:12px;justify-content:cent
    aucune bande noire perdue autour de l'image (brief 2.2) */
 .preview{min-height:0}
 .preview .stage{background:#000}
+/* display:flex bat l'attribut hidden : sans cette ligne, l'onglet Transcript
+   s'ouvrait PAR-DESSUS l'apercu au lieu de prendre sa place */
+.stage[hidden]{display:none}
 #apercu{max-width:100%;max-height:100%;width:auto;height:auto;display:block}
+/* Les mots ne sont plus sur la piste : ils sont ici, derriere l'onglet
+   « Transcript », comme dans l'Atelier. Un clic sur un mot s'y place. */
+.transcript{flex:1;min-height:0;overflow:auto;padding:9px 11px;line-height:2.1}
+.transcript button{background:rgba(245,243,241,.055);border:1px solid transparent;
+ color:var(--doux);border-radius:4px;padding:1px 4px;margin:0 1px;cursor:pointer;
+ font:12px -apple-system,system-ui,sans-serif}
+.transcript button:hover{background:rgba(233,168,75,.2);color:var(--texte)}
+.transcript button.on{background:var(--ambre-sourd);color:var(--ambre-clair);
+ border-color:rgba(233,168,75,.42)}
+.transcript button.coupe-mot{opacity:.38;text-decoration:line-through}
+.transcript p{margin:0 0 8px;color:var(--tres-doux);font-size:11px;line-height:1.5}
+
+/* ---- Étalonnage : un menu par camera, sous son image ---------------- */
+/* Trois choix et pas un de plus, la mesure du rush juste en dessous, et une
+   image fixe calculee par ffmpeg lut3d pour juger sans encoder. */
+.etal{flex:none;border-top:1px solid var(--bord);background:var(--gris-haut);
+ padding:7px 9px 8px;display:flex;flex-direction:column;gap:6px}
+.etal-haut{display:flex;align-items:center;gap:7px}
+.etal select{flex:1;min-width:0;height:28px;background:var(--gris);color:var(--texte);
+ border:1px solid var(--bord-fort);border-radius:6px;padding:0 6px;font-size:11.5px}
+.etal.doute select{border-color:rgba(233,168,75,.5)}
+.etal-bas{display:flex;gap:8px;align-items:flex-start}
+.controle{width:104px;height:auto;flex:none;display:block;border-radius:4px;
+ border:1px solid var(--bord);background:#000;cursor:zoom-in}
+.controle[hidden]{display:none}
+.diag{margin:0;font-size:11px;line-height:1.35;color:var(--tres-doux);min-width:0}
+.diag b{color:var(--doux);font-weight:600}
+.diag.doute b,.diag.doute{color:var(--ambre-clair)}
+.diag.rate{color:var(--rouge)}
+
+/* ---- Le titre du reel, en tete de la colonne de droite -------------- */
+#titre{width:100%;height:30px;margin-top:7px;background:var(--gris-haut);color:var(--texte);
+ border:1px solid var(--bord-fort);border-radius:6px;padding:0 8px;font-size:13px;
+ font-weight:600}
+#titre::placeholder{color:var(--tres-doux);font-weight:400}
+.ligne-pos{display:flex;align-items:center;gap:7px;margin-top:8px}
+.ligne-pos select{flex:1;height:28px;background:var(--gris-haut);color:var(--texte);
+ border:1px solid var(--bord-fort);border-radius:6px;padding:0 6px;font-size:11.5px}
 
 /* ---- Colonne de droite : valider et envoyer en production ----------- */
 aside{display:flex;flex-direction:column;gap:14px;min-height:0;overflow:auto}
@@ -177,30 +218,44 @@ textarea{display:none}
 .horloge span{color:var(--tres-doux)}
 .indice{font-size:11.5px;color:var(--tres-doux);display:flex;align-items:center;gap:6px;
  flex-wrap:wrap}
+/* le segment de sensibilite, a la taille « tiny » de l'Atelier */
+.seg.mini button{height:26px;padding:0 9px;font-size:11.5px}
+/* « Rétablir » : un lien, pas un bouton — il n'existe qu'apres une suppression */
+.lien{background:none;border:0;padding:4px 0;color:var(--ambre);font-size:12.5px;
+ font-weight:600;cursor:pointer}
+.lien:hover{color:var(--ambre-clair)}
+.lien[hidden]{display:none}
+/* la sensibilite et le ciseau restent ensemble, colles a droite */
+.blancs{margin-left:auto;display:flex;align-items:center;gap:8px}
 
-/* la piste elle-meme */
-.rail{position:relative;height:104px;background:var(--piste);border-radius:8px;
+/* La piste, aux mesures de l'Atelier : 64 px de haut, rayon 8, et la forme
+   d'onde d'un bord a l'autre. La V2 reservait 15 px en haut pour la regle et
+   27 px en bas pour les mots : c'est ce qui l'eloignait le plus du modele. Les
+   mots sont partis dans l'onglet Transcript, et la regle ne s'affiche plus que
+   quand on a zoome — au repos, la piste est exactement celle de la capture. */
+.rail{position:relative;height:64px;background:var(--piste);border-radius:8px;
  box-shadow:inset 0 0 0 1px var(--liseré);cursor:text;touch-action:none;
- user-select:none;-webkit-user-select:none;margin:0 7px 5px}
+ user-select:none;-webkit-user-select:none;margin:10px 7px 8px}
 /* un canvas est un element remplace : avec left et right poses, le navigateur
    garde sa largeur intrinseque de 300 px et ignore right. D'ou les dimensions
    explicites, qui restent calculees par le CSS donc justes apres un resize. */
-#onde{position:absolute;left:0;top:15px;width:100%;height:calc(100% - 42px);
- border-radius:4px;display:block}
-/* la regle de temps : sans elle, une piste zoomee ne dit plus ou l'on est */
-.grad{position:absolute;top:0;height:15px;width:1px;background:rgba(245,243,241,.13);
- pointer-events:none}
-.grad span{position:absolute;top:1px;left:4px;font:9.5px ui-monospace,monospace;
- color:var(--tres-doux);font-variant-numeric:tabular-nums}
-/* hors du reel : hachure sombre, pour voir d'un coup ce qui ne sortira pas */
-.voile{position:absolute;top:0;bottom:0;pointer-events:none;z-index:2;
- background:repeating-linear-gradient(135deg,rgba(9,9,10,.74) 0 6px,rgba(9,9,10,.86) 6px 12px)}
-.voile.g{border-radius:8px 0 0 8px}
-.voile.d{border-radius:0 8px 8px 0}
-/* une coupe : hachure rouge, et deux bords que l'on peut attraper */
-.coupe{position:absolute;top:0;bottom:0;min-width:3px;z-index:3;cursor:pointer;
- background:repeating-linear-gradient(135deg,rgba(231,120,120,.30) 0 4px,rgba(9,9,10,.80) 4px 8px);
- box-shadow:inset 1px 0 0 rgba(231,120,120,.55),inset -1px 0 0 rgba(231,120,120,.55)}
+#onde{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;display:block}
+/* la regle de temps, posee PAR-DESSUS l'onde et seulement quand on a zoome :
+   sans elle une piste zoomee ne dit plus ou l'on est, avec elle en permanence
+   la piste n'est plus celle de l'Atelier */
+.grad{position:absolute;top:0;bottom:0;width:1px;background:rgba(245,243,241,.13);
+ pointer-events:none;z-index:4}
+.grad span{position:absolute;top:0;left:3px;font:9.5px/12px ui-monospace,monospace;
+ color:var(--tres-doux);font-variant-numeric:tabular-nums;padding:0 3px;
+ background:rgba(9,9,11,.72);border-radius:0 3px 3px 0}
+/* Hors bornes, l'Atelier ne hachure rien : la forme d'onde descend simplement
+   a 23 % de son intensite (voir dessinerOnde). On voit le rush avant et apres,
+   on voit qu'il ne sortira pas, et la piste reste lisible. La V2 posait ici
+   une hachure sombre qui noyait tout ce qui depassait des bornes. */
+/* un blanc supprime : hachure rouge dans la piste, et deux bords attrapables */
+.coupe{position:absolute;top:0;bottom:0;min-width:2px;z-index:3;cursor:pointer;
+ background:repeating-linear-gradient(135deg,rgba(231,120,120,.28) 0 4px,rgba(9,9,10,.78) 4px 8px);
+ box-shadow:inset 1px 0 0 rgba(231,120,120,.5),inset -1px 0 0 rgba(231,120,120,.5)}
 .coupe.off{background:repeating-linear-gradient(135deg,rgba(231,120,120,.10) 0 4px,transparent 4px 9px);
  box-shadow:inset 0 0 0 1px rgba(231,120,120,.30)}
 .coupe i{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;
@@ -208,43 +263,58 @@ textarea{display:none}
 .coupe i:hover{background:var(--ambre-clair)}
 .coupe i.bord-a{left:0}.coupe i.bord-b{right:0}
 .coupe.off i{display:none}
-/* les mots transcrits, sur la meme piste */
-.mot{position:absolute;bottom:5px;font:10px/14px -apple-system,system-ui,sans-serif;
- color:var(--doux);white-space:nowrap;pointer-events:none;
- border-left:1px solid rgba(245,243,241,.18);padding-left:3px;z-index:4}
-/* les cadrages poses */
-.mk{position:absolute;top:15px;bottom:27px;width:2px;background:rgba(245,243,241,.6);
+/* les cadrages poses : un trait fin, et son heure dans une pastille lisible
+   par-dessus l'onde */
+.mk{position:absolute;top:0;bottom:0;width:2px;background:rgba(245,243,241,.6);
  cursor:pointer;z-index:5}
 .mk:hover,.mk.on{background:var(--ambre-clair);width:4px;margin-left:-1px}
-.mk span{position:absolute;top:1px;left:5px;font:10px ui-monospace,monospace;color:var(--doux);
- white-space:nowrap;pointer-events:none}
+.mk span{position:absolute;bottom:0;left:4px;font:9.5px/12px ui-monospace,monospace;
+ color:var(--doux);white-space:nowrap;pointer-events:none;padding:0 3px;
+ background:rgba(9,9,11,.72);border-radius:0 3px 3px 0}
 .mk:hover span,.mk.on span{color:var(--ambre-clair)}
-.zone{position:absolute;top:15px;bottom:27px;background:rgba(233,168,75,.13);
+.zone{position:absolute;top:0;bottom:0;background:rgba(233,168,75,.13);
  border-left:2px solid rgba(233,168,75,.55);pointer-events:none;z-index:4}
-/* departs et fin : des poignees en capsule, comme les bornes de l'Atelier */
-.poignee{position:absolute;top:-2px;bottom:-2px;width:14px;z-index:7;cursor:ew-resize;
- display:flex;align-items:center;justify-content:center;border-radius:6px 0 0 6px}
-.poignee::after{content:'';width:2px;height:22px;border-radius:2px;background:rgba(16,20,16,.65)}
-.poignee.debut{background:var(--vert);margin-left:-14px}
-.poignee.fin{background:var(--rouge);border-radius:0 6px 6px 0}
-.poignee:hover,.poignee.prise{filter:brightness(1.2);box-shadow:0 0 0 4px rgba(233,168,75,.18)}
-.poignee b{position:absolute;bottom:-1px;font:10px/1 ui-monospace,monospace;font-weight:600;
+/* Les bornes de l'Atelier : deux capsules de 16 px posees DE PART ET D'AUTRE
+   de la borne, jamais dessus. C'est ce qui les rend attrapables — viser un
+   trait de 2 px est injouable, viser 16 x 68 px ne demande rien.
+   Un seul accent, l'ambre : le vert et le rouge de la V2 disaient « debut » et
+   « fin », ce que les deux libelles sous la piste disent deja. */
+.poignee{position:absolute;top:-2px;bottom:-2px;width:16px;z-index:7;cursor:ew-resize;
+ display:flex;align-items:center;justify-content:center;background:var(--ambre)}
+.poignee::after{content:'';width:2px;height:20px;border-radius:2px;background:rgba(26,19,10,.7)}
+.poignee.debut{margin-left:-16px;border-radius:7px 0 0 7px}
+.poignee.fin{border-radius:0 7px 7px 0}
+.poignee:hover,.poignee.prise{background:var(--ambre-clair);
+ box-shadow:0 0 0 4px rgba(233,168,75,.18)}
+/* le numero de depart : il n'apparait que s'il y en a plusieurs (D1, D2) */
+.poignee b{position:absolute;top:-16px;font:9px/1 ui-monospace,monospace;font-weight:600;
  pointer-events:none;white-space:nowrap;background:rgba(9,9,11,.82);padding:2px 4px;
- border-radius:4px}
-.poignee.debut b{left:17px;color:var(--vert)}
-.poignee.fin b{right:17px;color:var(--rouge)}
-/* le cadre du reel : deux liserés, haut et bas, entre le premier depart et la fin */
+ border-radius:4px;color:var(--ambre-clair)}
+/* la zone gardee : deux liserés ambre, en haut et en bas, entre le premier
+   depart et la fin. Pas de bord gauche ni droit : les poignees ferment la boite */
 .cadre-reel{position:absolute;top:0;bottom:0;pointer-events:none;z-index:6;
- border-top:2px solid var(--vert);border-bottom:2px solid var(--vert);opacity:.8}
+ border-top:2px solid var(--ambre);border-bottom:2px solid var(--ambre)}
 /* le curseur n'est jamais saisissable : c'est la piste entiere qui l'est */
 .tete{position:absolute;top:-5px;bottom:-5px;width:2px;margin-left:-1px;border-radius:2px;
  background:#f3f0e9;box-shadow:0 0 10px rgba(255,255,255,.45);pointer-events:none;z-index:9}
 
-/* sous la piste : la fenetre affichee et la legende */
-.souspiste{display:flex;align-items:center;gap:14px;margin:0 7px 8px;
- font:11.5px ui-monospace,monospace;color:var(--tres-doux)}
-.souspiste .legende{font:11.5px -apple-system,system-ui,sans-serif}
-.souspiste .sp{flex:1}
+/* Sous la piste : DÉBUT a gauche, la fenetre du rush au centre, FIN a droite.
+   Les sauts fins et larges sont a cote de la valeur, la ou on les lit. */
+.pied{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;
+ gap:8px;margin:0 7px 9px}
+.borne{display:flex;align-items:center;gap:3px}
+.borne>span:first-child{margin-right:6px;font-size:9px;font-weight:600;
+ text-transform:uppercase;letter-spacing:.12em;color:var(--tres-doux)}
+.borne b{min-width:70px;text-align:center;color:var(--texte);
+ font:500 12.5px ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.saut{display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;
+ color:var(--doux);border:1px solid var(--bord-fort);border-radius:8px;
+ background:rgba(245,243,241,.07);cursor:pointer;font:13px/1 ui-monospace,monospace}
+.saut:hover:not(:disabled){color:var(--texte);background:rgba(245,243,241,.12)}
+.saut:active:not(:disabled){transform:scale(.94)}
+.saut:disabled{opacity:.33;cursor:default}
+.fenetre{font:11.5px ui-monospace,monospace;color:var(--tres-doux);
+ font-variant-numeric:tabular-nums}
 
 .debuts{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 7px 9px;min-height:24px;
  font-size:11px;color:var(--doux)}
@@ -333,16 +403,55 @@ body.reels .reel-seul[hidden]{display:none}
   <div class="sources">
     <div class="src carte"><h2><span>Caméra — haut</span> <span class="val" id="valA"></span></h2>
       <div class="stage"><div class="wrap" id="wA"><canvas id="miroirA" width="640" height="360"></canvas>
-        <div class="box" id="bA"><i class="nw"></i><i class="ne"></i><i class="sw"></i><i class="se"></i></div></div></div></div>
+        <div class="box" id="bA"><i class="nw"></i><i class="ne"></i><i class="sw"></i><i class="se"></i></div></div></div>
+      <div class="etal" id="etalA">
+        <div class="etal-haut"><span class="etiquette">Étalonnage</span>
+          <select id="lutA" aria-label="Étalonnage de la caméra"></select></div>
+        <div class="etal-bas">
+          <img class="controle" id="ctrlA" alt="Image de contrôle, LUT appliquée"
+            title="Appuyer pour voir le rush sans la LUT" hidden>
+          <p class="diag" id="diagA">—</p>
+        </div>
+      </div></div>
     <div class="src carte"><h2><span>Écran — bas</span> <span class="val" id="valB"></span></h2>
       <div class="stage"><div class="wrap" id="wB"><canvas id="miroirB" width="640" height="360"></canvas>
-        <div class="box" id="bB"><i class="nw"></i><i class="ne"></i><i class="sw"></i><i class="se"></i></div></div></div></div>
+        <div class="box" id="bB"><i class="nw"></i><i class="ne"></i><i class="sw"></i><i class="se"></i></div></div></div>
+      <div class="etal" id="etalB">
+        <div class="etal-haut"><span class="etiquette">Étalonnage</span>
+          <select id="lutB" aria-label="Étalonnage de la écran"></select></div>
+        <div class="etal-bas">
+          <img class="controle" id="ctrlB" alt="Image de contrôle, LUT appliquée"
+            title="Appuyer pour voir le rush sans la LUT" hidden>
+          <p class="diag" id="diagB">—</p>
+        </div>
+      </div></div>
   </div>
 
-  <section class="preview carte"><h2><span>Aperçu du rendu</span> <span class="val" id="infoApercu"></span></h2>
-    <div class="stage"><canvas id="apercu"></canvas></div></section>
+  <section class="preview carte">
+    <h2><div class="seg mini" id="ongletsApercu" role="group" aria-label="Aperçu ou transcript">
+        <button data-onglet="apercu" class="on">Aperçu</button>
+        <button data-onglet="transcript">Transcript</button>
+      </div> <span class="val" id="infoApercu"></span></h2>
+    <div class="stage" id="scApercu"><canvas id="apercu"></canvas></div>
+    <div class="transcript" id="scTranscript" hidden></div></section>
 
   <aside>
+    <div class="bloc reel-seul" id="blocTitre" style="flex-direction:column;align-items:stretch">
+      <h2>Titre du reel
+        <button class="aide" id="aideTitre" aria-label="Aide sur le titre" title="Pré-rempli par le titre proposé dans le manifeste du lot. Il part avec le cadrage, nomme le fichier produit, et servira à l’incrustation — pas encore incrustée.">?</button></h2>
+      <input id="titre" type="text" maxlength="120" placeholder="Sans titre"
+        aria-label="Titre du reel">
+      <div class="ligne-pos">
+        <span class="etiquette">Position</span>
+        <select id="titrePosition" aria-label="Position du titre dans la vidéo">
+          <option value="haut">En haut</option>
+          <option value="milieu">Au milieu</option>
+          <option value="aucun" selected>Aucune</option>
+        </select>
+      </div>
+      <p class="hint">Pas encore incrusté : la position est enregistrée pour plus tard.</p>
+    </div>
+
     <div class="bloc">
       <h2>Cadrages posés <span class="val" id="nbPts"></span>
         <button class="aide" id="aideCadrages" aria-label="Aide sur les cadrages" title="Un cadrage tient jusqu’au point suivant. Coche « glisse » pour passer de l’un à l’autre en douceur. Clique une ligne pour la sélectionner, puis « Corriger ce point ».">?</button></h2>
@@ -371,7 +480,6 @@ body.reels .reel-seul[hidden]{display:none}
     </div>
 
     <button class="secondaire" id="copier">Copier le JSON du cadrage</button>
-    <input id="titre" type="hidden">
     <textarea id="sortie"></textarea>
   </aside>
 </main>
@@ -383,25 +491,39 @@ body.reels .reel-seul[hidden]{display:none}
     <button class="lecture" id="play" title="Lecture / pause (Espace)" aria-label="Lecture">
       <svg viewBox="0 0 12 14" id="glyphePlay"><path d="M1 1l10 6-10 6z"/></svg>
     </button>
-    <span class="horloge" id="tc"><b>0:00.0</b> <span>/ 0:00.0</span></span>
-    <button class="act g" id="m10" title="Reculer de 10 s">−10 s</button>
-    <button class="act g" id="m1" title="Reculer de 1 s">−1 s</button>
-    <button class="act g" id="p1" title="Avancer de 1 s">+1 s</button>
-    <button class="act g" id="p10" title="Avancer de 10 s">+10 s</button>
-    <label class="chk reel-seul"><input type="checkbox" id="sauter" checked> Sauter les coupes</label>
-    <span style="flex:1"></span>
-    <span class="reel-seul" style="display:flex;gap:6px">
+    <span class="horloge" id="tc"><b>00:00.0</b> <span>/ 00:00.0</span></span>
+    <span class="indice">Espace lecture · <kbd>I</kbd> / <kbd>O</kbd> fixer début / fin</span>
+    <span class="blancs reel-seul">
+      <div class="seg mini" id="sensibilite" role="group" aria-label="Sensibilité de détection des blancs">
+        <button data-niveau="leger" title="Ne coupe que les longs silences (0,50 s et plus)">Léger</button>
+        <button data-niveau="normal" class="on" title="Coupe les silences de 0,35 s et plus">Normal</button>
+        <button data-niveau="serre" title="Coupe tous les silences détectés (0,25 s et plus)">Serré</button>
+      </div>
       <button class="act g" id="supprimerBlancs"
-        title="Coupe tous les blancs proposés d'un coup. Ne touche pas aux coupes posées à la main.">Supprimer les blancs</button>
-      <button class="act fantome" id="toutGarder"
-        title="Remet toutes les coupes en « gardé », les vôtres comprises : le reel repasse en continu.">Tout garder</button>
+        title="Coupe tous les blancs détectés d'un coup. Ne touche pas aux coupes posées à la main.">✂ Supprimer les blancs</button>
+      <button class="lien" id="toutGarder" hidden
+        title="Remet toutes les coupes en « gardé », les vôtres comprises : le reel repasse en continu.">Rétablir</button>
     </span>
-    <button class="act fantome" id="toutVoir" title="Afficher la prise entière">Tout voir</button>
   </div>
   <div class="rail" id="rail"><canvas id="onde"></canvas><div class="tete" id="tete"></div></div>
-  <div class="souspiste">
-    <span id="vueInfo">—</span><span class="sp"></span>
-    <span class="legende" id="legendePiste">Clic sur la piste pour s'y placer · molette : zoom · deux doigts : glisser</span>
+  <div class="pied">
+    <div class="borne reel-seul" aria-label="Début du reel">
+      <span>Début</span>
+      <button class="saut" id="debutMM" title="Reculer le début de 0,5 s">«</button>
+      <button class="saut" id="debutM" title="Reculer le début de 0,1 s">‹</button>
+      <b id="valDebut">00:00.0</b>
+      <button class="saut" id="debutP" title="Avancer le début de 0,1 s">›</button>
+      <button class="saut" id="debutPP" title="Avancer le début de 0,5 s">»</button>
+    </div>
+    <span class="fenetre" id="vueInfo">—</span>
+    <div class="borne reel-seul" aria-label="Fin du reel">
+      <span>Fin</span>
+      <button class="saut" id="finMM" title="Reculer la fin de 0,5 s">«</button>
+      <button class="saut" id="finM" title="Reculer la fin de 0,1 s">‹</button>
+      <b id="valFin">00:00.0</b>
+      <button class="saut" id="finP" title="Avancer la fin de 0,1 s">›</button>
+      <button class="saut" id="finPP" title="Avancer la fin de 0,5 s">»</button>
+    </div>
   </div>
   <div class="debuts reel-seul" id="debuts"></div>
 
@@ -428,6 +550,12 @@ body.reels .reel-seul[hidden]{display:none}
     <div class="groupe navigation" aria-label="Navigation">
       <span>Navigation — valider, c'est <kbd>N</kbd></span>
       <div class="boutons">
+        <button class="act g" id="m10" title="Reculer de 10 s">−10 s</button>
+        <button class="act g" id="m1" title="Reculer de 1 s">−1 s</button>
+        <button class="act g" id="p1" title="Avancer de 1 s">+1 s</button>
+        <button class="act g" id="p10" title="Avancer de 10 s">+10 s</button>
+        <button class="act fantome" id="toutVoir" title="Afficher la prise entière">Tout voir</button>
+        <label class="chk reel-seul"><input type="checkbox" id="sauter" checked> Sauter les coupes</label>
         <button class="act g" id="reelPrec" title="Revenir au reel précédent sans rien envoyer">‹ Reel précédent</button>
         <button class="act fantome" id="passer"
           title="Ouvrir le reel suivant sans l'envoyer en production">passer sans valider ›</button>
@@ -467,6 +595,25 @@ const REGLES={
  // Le suivi distingue (reel, format) : deux formats du même reel sont deux
  // fichiers, donc deux lignes de suivi et deux ✓ dans le menu.
  cleEnvoi:(reel,format)=>String(reel)+'\u0000'+String(format||'vmc'),
+ // La sensibilité de détection des blancs, comme l'Atelier : UN seul réglage
+ // change, la durée minimale d'une pause. Le seuil en décibels, lui, est commun
+ // et déjà appliqué en amont (preparer-reels.py liste toute pause ≥ 0,25 s).
+ PAUSE_MIN:{leger:0.50,normal:0.35,serre:0.25},
+ // Les blancs d'un niveau. Les mêmes marges que le script : 0,12 s après le
+ // dernier mot, 0,10 s avant le suivant, sinon la coupe mange l'attaque.
+ // La comparaison se fait en millisecondes entieres : 10.6 - 10.25 vaut
+ // 0,34999…, et une pause de 0,35 s echappait au niveau qui la vise.
+ blancsDuNiveau:(blancs,niveau)=>{
+  const min=Math.round(1000*(REGLES.PAUSE_MIN[niveau]||REGLES.PAUSE_MIN.normal));
+  return (blancs||[]).filter(b=>Math.round(1000*(b[1]-b[0]))>=min)
+   .map(b=>({a:+(b[0]+0.12).toFixed(3),b:+(b[1]-0.10).toFixed(3)}))
+   .filter(c=>c.b-c.a>=0.02)},
+ // L'étalonnage proposé par la mesure du rush. Quand la mesure a échoué, on ne
+ // devine pas : « Aucun » laisse le rush tel qu'il est entré.
+ etalonnageDefaut:diag=>(diag&&diag.propose)||'aucun',
+ // La fenêtre que la piste montre est-elle la prise entière ? En dessous de ce
+ // rapport on considère que oui, et la règle de temps reste rangée.
+ pisteEntiere:(tout,fenetre)=>!(tout/(fenetre||1)>=1.02),
 };
 const vid=vId('vid'),cvs=vId('apercu'),ctx=cvs.getContext('2d');
 const mirA=vId('miroirA'),mcA=mirA.getContext('2d');
@@ -587,8 +734,13 @@ function maj(){const t=vid.currentTime;
  const dedans=t>=vue.a&&t<=vue.b;
  vId('tete').style.left=pc(t);vId('tete').style.opacity=dedans?1:0;
  const n=(borneB-borneA)/((vue.b-vue.a)||1);
- vId('vueInfo').textContent=n<1.02?`Piste entière · ${hms(borneB)}`
+ // au centre du pied : la fenetre du rush, ou celle du zoom quand on a zoome
+ vId('vueInfo').textContent=REGLES.pisteEntiere(borneB-borneA,vue.b-vue.a)
+  ?`Rush ${hm(borneA)} → ${hm(borneB)}`
   :`Fenêtre ${hms(vue.a)} → ${hms(vue.b)} · zoom ${n<10?n.toFixed(1):Math.round(n)}×`;
+ vId('valDebut').textContent=reel&&debuts.length?hms(Math.min(...debuts)):'—';
+ vId('valFin').textContent=reel?hms(fin):'—';
+ if(!vId('scTranscript').hidden)surlignerMot(t);
 }
 // La fenetre suit le curseur pendant la lecture : zoome, on perdait le son de vue.
 function suivreTete(t){
@@ -640,8 +792,7 @@ vId('rail').addEventListener('pointermove',e=>{
   prise.el.style.left=pc(debuts[prise.i]);place(debuts[prise.i]);return}
  if(prise.quoi==='fin'){
   fin=Math.min(borneB,Math.max(Math.min(...debuts)+0.3,t));
-  prise.el.style.left=pc(fin);prise.el.querySelector('b').textContent='fin '+hms(fin);
-  place(fin);return}
+  prise.el.style.left=pc(fin);place(fin);return}
  if(prise.quoi==='coupe'){
   if(!prise.bord)return;                     // le corps de la coupe ne la bouge pas
   const c=coupes[prise.i],d=prise.depart,boite=prise.el.parentElement;
@@ -664,14 +815,35 @@ vId('rail').addEventListener('pointerup',lacher);
 vId('rail').addEventListener('pointercancel',lacher);
 
 // Un clic pour couper tous les blancs, un clic pour tout remettre.
-// « Supprimer les blancs » ne touche QUE les coupes proposées par l'analyse
+// « ✂ Supprimer les blancs » ne touche QUE les coupes proposées par l'analyse
 // (blancs et reprises). Une coupe posée à la main puis volontairement rendue
 // repartait au rendu d'un clic sur un bouton qui ne promet que les blancs.
-// « Tout garder » va bien dans l'autre sens pour tout le monde : il ne retire
-// rien du rendu, il remet, et c'est ce que son nom annonce.
+// « Rétablir » va bien dans l'autre sens pour tout le monde : il ne retire
+// rien du rendu, il remet, et c'est ce que son nom annonce. Il ne s'affiche
+// que quand il a quelque chose à rétablir.
 vId('supprimerBlancs').onclick=()=>{if(!reel)return;
- coupes.forEach(c=>{if(REGLES.proposee(c))c.on=true});maj2()};
+ coupes.forEach(c=>{if(REGLES.proposee(c))c.on=true});maj2();
+ poserEtat(`${coupes.filter(c=>c.on).length} coupe(s) actives — ${hms(dureeFinale(Math.min(...debuts)))} à l'arrivée.`,'')};
 vId('toutGarder').onclick=()=>{if(!reel)return;coupes.forEach(c=>c.on=false);maj2()};
+
+// La sensibilité de détection des blancs. Comme dans l'Atelier, elle ne change
+// qu'une chose : la durée minimale d'une pause coupée. On recalcule les blancs
+// du niveau choisi, et on garde ce que l'on avait décidé blanc par blanc — il
+// serait pénible de reperdre ses arbitrages en changeant d'avis sur un réglage.
+let niveauBlancs='normal';
+function majSegment(){
+ for(const b of vId('sensibilite').children)
+  b.classList.toggle('on',b.dataset.niveau===niveauBlancs)}
+function blancsDuNiveau(garde){
+ const etat=new Map(coupes.filter(c=>c.type==='blanc').map(c=>[c.a.toFixed(1),c.on]));
+ const autres=coupes.filter(c=>c.type!=='blanc');
+ coupes=REGLES.blancsDuNiveau(blancs,niveauBlancs).map(c=>({...c,type:'blanc',
+   on:garde&&etat.has(c.a.toFixed(1))?etat.get(c.a.toFixed(1)):false})).concat(autres)}
+for(const b of vId('sensibilite').children)b.onclick=()=>{
+ if(!reel||b.dataset.niveau===niveauBlancs)return;
+ niveauBlancs=b.dataset.niveau;majSegment();blancsDuNiveau(true);maj2();
+ poserEtat(`Sensibilité : ${b.textContent.toLowerCase()} — `+
+  `${coupes.filter(c=>c.type==='blanc').length} blanc(s) détecté(s).`,'')};
 
 const GLYPHE={play:'M1 1l10 6-10 6z',pause:'M1 1h3.4v12H1zm6.6 0H11v12H7.6z'};
 function glyphe(){vId('glyphePlay').firstElementChild.setAttribute('d',joue?GLYPHE.pause:GLYPHE.play)}
@@ -716,12 +888,15 @@ function rail(){
   const m=Math.floor(pt.t/60);d.innerHTML=`<span>${m}:${(pt.t-60*m).toFixed(0).padStart(2,'0')}</span>`;
   d.onclick=ev=>{ev.stopPropagation();aller(points.indexOf(pt))};
   r.appendChild(d)});
- if(reel){motsPiste(r);bornes(r)}
+ if(reel)bornes(r);
+ if(!vId('scTranscript').hidden)dessinerTranscript();
  maj()}
 
-// La regle : sans elle, une piste zoomee ne dit plus ou l'on est.
+// La regle, posee PAR-DESSUS l'onde et seulement quand on a zoome : au repos
+// la piste doit etre exactement celle de l'Atelier, c'est-a-dire nue.
 function regle(r){
  const large=vue.b-vue.a,px=r.clientWidth||1;
+ if(REGLES.pisteEntiere(borneB-borneA,large))return;
  const pas=[.1,.25,.5,1,2,5,10,15,30,60,120,300].find(v=>v/large*px>=62)||600;
  const court=pas<1;
  for(let k=Math.ceil(vue.a/pas);k*pas<vue.b;k++){
@@ -758,19 +933,21 @@ function dessinerOnde(){
  let fort=0.08;for(const v of pics)if(v>fort)fort=v;
  const mi=h/2,pas=l/n,ep=Math.max(dpr,pas*0.72);
  x.fillStyle=COULEUR_ONDE;
+ // hors bornes, l'onde reste visible mais en retrait : on voit le rush avant
+ // et apres le reel, et on voit qu'il n'en fait pas partie
+ const d0=reel&&debuts.length?Math.min(...debuts):borneA,d1=reel?fin:borneB;
  for(let i=0;i<n;i++){
+  const t=vue.a+large*(i+0.5)/n;
+  x.globalAlpha=(t>=d0&&t<=d1)?1:0.23;
   // racine : le son se lit en decibels, une hauteur lineaire ecrase les voix
   const ht=Math.max(dpr,Math.pow(pics[i]/fort,0.75)*h*0.86);
   x.fillRect(i*pas+(pas-ep)/2,mi-ht/2,ep,ht)}
+ x.globalAlpha=1;
 }
 
-// Hors du reel : on hachure. C'est ce qui ne sortira pas du rendu.
+// Le cadre de la zone gardee : deux liseres ambre, du premier depart a la fin.
 function voiles(r){
  const d0=debuts.length?Math.min(...debuts):borneA;
- for(const [cl,a,b] of [['g',vue.a,d0],['d',fin,vue.b]]){
-  if(b<=a)continue;
-  const v=document.createElement('div');v.className='voile '+cl;
-  v.style.left=pc(a);v.style.width=`calc(${pc(b)} - ${pc(a)})`;r.appendChild(v)}
  if(fin>d0){const k=document.createElement('div');k.className='cadre-reel';
   k.style.left=pc(d0);k.style.width=`calc(${pc(fin)} - ${pc(d0)})`;r.appendChild(k)}}
 
@@ -792,31 +969,75 @@ function coupesPiste(r){
                `<i class="bord-b" data-prise="coupe" data-bord="b" data-i="${i}"></i>`;
    r.appendChild(z)})}
 
-// Les mots transcrits, sur la meme piste. On n'en pose que ce qui tient : au
-// zoom arriere ils se chevaucheraient en bouillie illisible.
-function motsPiste(r){
- const px=r.clientWidth||1;let libre=0;
- for(const [a,,txt] of mots){
-  if(a>vue.b)break;
-  if(a<vue.a)continue;
-  const x=(a-vue.a)/((vue.b-vue.a)||1)*px;
-  if(x<libre)continue;
-  const s=document.createElement('div');s.className='mot';s.style.left=x+'px';s.textContent=txt;
-  r.appendChild(s);libre=x+s.offsetWidth+5}}
+// Les mots transcrits ne sont plus sur la piste : ils encombraient 27 px de
+// ses 104, et c'est ce qui l'eloignait le plus de la selection de l'Atelier.
+// Ils vivent derriere l'onglet « Transcript », a cote de « Aperçu ». Un clic
+// sur un mot s'y place ; ceux que le montage retire sont barres.
+let motActif=-1;
+function dessinerTranscript(){
+ const c=vId('scTranscript');c.textContent='';motActif=-1;
+ if(!mots.length){
+  const p=document.createElement('p');
+  p.textContent=reel?"Pas de transcription pour ce rush."
+   :"Ouvre un reel pour lire sa transcription.";
+  return void c.appendChild(p)}
+ const d0=debuts.length?Math.min(...debuts):borneA;
+ const p=document.createElement('p');
+ p.textContent=`${mots.length} mots · clic pour s'y placer · barré = retiré au montage`;
+ c.appendChild(p);
+ mots.forEach(([a,,txt],i)=>{
+  const m=document.createElement('button');m.textContent=txt;m.dataset.i=i;
+  m.title=hms(a);
+  if(a<d0-0.02||a>fin||coupes.some(x=>x.on&&a>=x.a-0.02&&a<x.b))m.className='coupe-mot';
+  m.onclick=()=>place(a);
+  c.append(m,' ')})}
+// le mot en cours de lecture, sans redessiner le panneau a chaque image
+function surlignerMot(t){
+ let i=-1;
+ for(let k=0;k<mots.length;k++){if(mots[k][0]>t+0.02)break;if(mots[k][1]>=t-0.02)i=k}
+ if(i===motActif)return;
+ const c=vId('scTranscript');
+ const vieux=c.querySelector('button.on');if(vieux)vieux.classList.remove('on');
+ motActif=i;
+ if(i<0)return;
+ const neuf=c.querySelector(`button[data-i="${i}"]`);
+ if(neuf){neuf.classList.add('on');
+  // on ne fait defiler que ce qu'il faut : scrollIntoView volerait la page
+  const h=c.getBoundingClientRect(),m=neuf.getBoundingClientRect();
+  if(m.top<h.top||m.bottom>h.bottom)c.scrollTop+=m.top-h.top-h.height/2}}
 
-// Les departs et la fin restent visibles et se glissent a la souris.
+// Les deux poignees de la zone gardee, posees de part et d'autre de la borne
+// et jamais dessus : c'est ce qui les rend attrapables. Leurs heures sont lues
+// sous la piste (DÉBUT / FIN), pas sur la poignee : un seul endroit par valeur.
+// Le numero de depart n'apparait que s'il y en a plusieurs.
 function bornes(r){
+ const plusieurs=debuts.length>1;
  debuts.forEach((t,i)=>{
   if(t<vue.a||t>vue.b)return;
   const k=document.createElement('div');k.className='poignee debut';
   k.dataset.prise='debut';k.dataset.i=i;k.style.left=pc(t);
-  k.innerHTML=`<b>D${i+1}</b>`;k.title=`Départ ${i+1} à ${hms(t)} — à glisser`;
+  if(plusieurs)k.innerHTML=`<b>D${i+1}</b>`;
+  k.title=`Début${plusieurs?' '+(i+1):''} à ${hms(t)} — à glisser`;
   r.appendChild(k)});
  if(fin>=vue.a&&fin<=vue.b){
   const f=document.createElement('div');f.className='poignee fin';
   f.dataset.prise='fin';f.dataset.i=0;f.style.left=pc(fin);
-  f.innerHTML=`<b>fin ${hms(fin)}</b>`;f.title=`Fin du reel à ${hms(fin)} — à glisser`;
+  f.title=`Fin du reel à ${hms(fin)} — à glisser`;
   r.appendChild(f)}}
+// Les sauts fins et larges, sous la piste : viser un dixieme de seconde a la
+// souris est injouable, et le clavier ne borne que la tete de lecture.
+function bougerBorne(quoi,pas){
+ if(!reel)return;
+ if(quoi==='debut'){
+  const t=Math.max(borneA,Math.min(fin-0.1,Math.min(...debuts)+pas));
+  debuts[debuts.indexOf(Math.min(...debuts))]=+t.toFixed(3);
+  debuts.sort((a,b)=>a-b);place(t)}
+ else{fin=+Math.min(borneB,Math.max(Math.min(...debuts)+0.3,fin+pas)).toFixed(3);place(fin)}
+ maj2()}
+for(const [id,quoi,pas] of [['debutMM','debut',-0.5],['debutM','debut',-0.1],
+  ['debutP','debut',0.1],['debutPP','debut',0.5],['finMM','fin',-0.5],
+  ['finM','fin',-0.1],['finP','fin',0.1],['finPP','fin',0.5]])
+ vId(id).onclick=()=>bougerBorne(quoi,pas);
 function aller(i){sel=i;const p=points[i];
  crop.A={...p.A};crop.B={...p.B};place(p.t);boites();table();rail();vId('maj').disabled=false}
 function table(){
@@ -857,6 +1078,11 @@ function sortie(){
   camera:reel.camera,ecran:reel.ecran,decalage:reel.decalage,
   retourner_ecran:!!reel.retourner_ecran,
   debuts:debuts.map(t=>+t.toFixed(3)),fin:+fin.toFixed(3),titre:vId('titre').value.trim(),
+  // le titre part avec le cadrage : il nomme le fichier produit, et sa
+  // position est gardee pour l'incrustation a venir — rien n'est incruste
+  titre_position:vId('titrePosition').value,
+  // l'etalonnage voyage en cle de table, jamais en nom de fichier
+  etalonnages:reel.ecran?{...etals}:{camera:etals.camera},
   coupes:coupes.filter(c=>c.on).map(c=>[c.a,c.b])});
  if(reel&&reel.base!=null)Object.assign(d,{base:reel.base,public:reel.public});
  vId('sortie').value=JSON.stringify(d);
@@ -1022,8 +1248,11 @@ function dimensionnerPanneaux(){
   Math.round(Math.min(h*16/9,innerWidth*0.5))+'px';
  const f=FORMATS[fmt];if(!f)return;
  const carte=document.querySelector('.preview');
- const ha=carte.querySelector('.stage').clientHeight;
- if(ha>0)carte.style.width=Math.round(Math.min(ha*f.W/f.H,innerWidth*0.42))+'px';
+ if(vId('scTranscript').hidden){
+  const ha=carte.querySelector('.stage').clientHeight;
+  if(ha>0)carte.style.width=Math.round(Math.min(ha*f.W/f.H,innerWidth*0.42))+'px'}
+ // le transcript n'a pas de proportions a respecter : une colonne de lecture
+ else carte.style.width=Math.round(Math.min(360,innerWidth*0.3))+'px';
  vId('infoApercu').textContent=`${f.W} × ${f.H}`;
  for(const id of ['wA','wB']){const w=vId(id),stage=w.parentElement;
   w.style.width=Math.max(0,Math.min(stage.clientWidth,stage.clientHeight*16/9))+'px'}
@@ -1106,14 +1335,34 @@ function majEtatSortie(){
 try{etats=JSON.parse(localStorage.getItem(CLE)||'{}')}catch(e){etats={}}
 // sans point pose, le cadre affiche vaut cadrage pour toute la video : c'est ce
 // que l'on voit a l'ecran, l'envoyer vide obligeait a deviner le cadrage
+// Aperçu ou Transcript : deux onglets, comme dans l'Atelier. Le panneau des
+// mots prend la place de l'image, pas une colonne de plus.
+function onglet(quel){
+ const image=quel!=='transcript';
+ vId('scApercu').hidden=!image;vId('scTranscript').hidden=image;
+ for(const b of vId('ongletsApercu').children)
+  b.classList.toggle('on',b.dataset.onglet===(image?'apercu':'transcript'));
+ if(!image)dessinerTranscript();
+ dimensionnerPanneaux();
+ if(image)apercu()}
+for(const b of vId('ongletsApercu').children)b.onclick=()=>onglet(b.dataset.onglet);
+
 function poserCadreSiVide(){
  if(!points.filter(dansPassage).length){points.push({t:0,fmt,A:{...crop.A},B:{...crop.B}});table();rail()}
  sortie()}
-function hms(t){const m=Math.floor(t/60);return m+':'+(t-60*m).toFixed(1).padStart(4,'0')}
+// « 00:27.2 » : deux chiffres aux minutes, comme l'horloge de l'Atelier
+function hms(t){const m=Math.floor(t/60);
+ return String(m).padStart(2,'0')+':'+(t-60*m).toFixed(1).padStart(4,'0')}
+const hm=t=>hms(t).replace(/\.\d$/,'');   // sans le dixieme, pour la fenetre du rush
 function garder(){
  if(!reel||chargement)return;
  etats[reel.id]={points,debuts,fin,titre:vId('titre').value,retourne:!!reel.retourner_ecran,cadre:{A:crop.A,B:crop.B},
+  titre_position:vId('titrePosition').value,etalonnages:{...etals},niveau:niveauBlancs,
+  // on retient les blancs que l'on a REMIS, et non ceux que l'on a coupes :
+  // changer de sensibilite en fait apparaitre d'autres, qui doivent partir
+  // dans l'etat par defaut de leur niveau et pas dans celui du voisin
   coupesGardees:coupes.filter(c=>!c.on&&c.type!=='manuel').map(c=>c.a.toFixed(2)),
+  coupesPrises:coupes.filter(c=>c.on&&c.type==='blanc').map(c=>c.a.toFixed(2)),
   manuelles:coupes.filter(c=>c.type==='manuel')};
  try{localStorage.setItem(CLE,JSON.stringify(etats))}catch(e){}}
 function premiereParole(){
@@ -1138,11 +1387,21 @@ async function chargerReel(id){
  const d=await fetch(reel.donnees+'?'+Date.now()).then(r=>r.json()).catch(()=>({}));
  const e=etats[reel.id]||{};
  crop.A={x:400,y:120,w:2200,h:1956};crop.B={x:800,y:120,w:2200,h:1956};
- mots=d.mots||[];blancs=d.blancs||[];visage=d.visage||null;suivi=LOT.suivi?d.suivi||null:null;vus={};
+ mots=d.mots||[];visage=d.visage||null;suivi=LOT.suivi?d.suivi||null:null;vus={};
  // reel sans second rush : seuls les formats a une camera ont un sens
  if(!reel.ecran)montrerFormats(ORDRE_FMT.filter(c=>!FORMATS[c].deux_cameras));
+ // Les blancs sont recalcules ici, au niveau de sensibilite retenu : c'est le
+ // reglage « Léger · Normal · Serré » qui decide lesquels existent, pas le
+ // script. Les reprises, elles, viennent du JSON — elles ne se devinent pas.
+ niveauBlancs=e.niveau||'normal';majSegment();
+ blancs=d.blancs||[];
+ const prises=new Set(e.coupesPrises||[]);
+ coupes=REGLES.blancsDuNiveau(blancs,niveauBlancs)
+  .map(c=>({...c,type:'blanc',on:prises.has(c.a.toFixed(2))}));
  const gardees=new Set(e.coupesGardees||[]);
- coupes=(d.coupes||[]).map(c=>({...c,on:(c.on!==false)&&!gardees.has(c.a.toFixed(2))}))
+ coupes=coupes
+  .concat((d.coupes||[]).filter(c=>c.type!=='blanc')
+   .map(c=>({...c,on:(c.on!==false)&&!gardees.has(c.a.toFixed(2))})))
   .concat((e.manuelles||[]).map(c=>({...c})));
  coupeEnCours=null;vId('couperIci').textContent='Couper ici';
  points=(e.points||[]).map(p=>({...p,B:{...p.B}}));
@@ -1152,7 +1411,11 @@ async function chargerReel(id){
   for(const p of points){p.B.x=SRC_W-p.B.x-p.B.w;p.B.y=SRC_H-p.B.y-p.B.h}
  debuts=e.debuts&&e.debuts.length?e.debuts:(d.debuts&&d.debuts.length?[...d.debuts]:[premiereParole()]);
  fin=e.fin!=null?e.fin:(d.fin!=null?d.fin:reel.duree);
- vId('titre').value=e.titre||d.titre||'';
+ vId('titre').value=e.titre!=null?e.titre:(d.titre||'');
+ vId('titrePosition').value=e.titre_position||'aucun';
+ // l'etalonnage retenu, sinon ce que la mesure du rush proposera plus bas
+ etals={camera:'aucun',ecran:'aucun',...(e.etalonnages||{})};etalsPoses=!!e.etalonnages;
+ for(const l of ['A','B'])vId('lut'+l).value=etals[SOURCE[l]];
  DUREE=reel.duree;borneA=0;borneB=reel.duree;sel=-1;vId('maj').disabled=true;
  const duMien=points.filter(dansPassage);
  if(duMien.length){crop.A={...duMien[0].A};crop.B={...duMien[0].B}}
@@ -1165,14 +1428,21 @@ async function chargerReel(id){
  majEtatSortie();
  vid.src=reel.proxy;vid.load();
  forme=d.forme||null;toutVoir();table();chips();
+ mesurerEtalonnage();
  const dernier=selP.selectedIndex===selP.options.length-1;
  vId('reelPrec').disabled=selP.selectedIndex===0;vId('passer').disabled=dernier;
  vId('envoyer').disabled=false;
  vId('envoyer').textContent=dernier?'Valider et envoyer en production':'Valider et reel suivant ›';}
-function maj2(){rail();chips();sortie()}
+function maj2(){rail();chips();sortie();
+ // « Rétablir » ne s'affiche que s'il a quelque chose a remettre
+ vId('toutGarder').hidden=!coupes.some(c=>c.on)}
 function chips(){
  vId('exporter').hidden=debuts.length<2;
  const c=vId('debuts');c.textContent='';
+ // avec un seul depart, cette ligne repetait ce que le pied de la piste dit
+ // deja (DÉBUT, FIN). Elle ne revient que s'il y a plusieurs departs a gerer.
+ c.hidden=debuts.length<2;
+ if(c.hidden)return void recapitule();
  const t0=document.createElement('span');t0.textContent='Départs :';c.appendChild(t0);
  debuts.forEach((t,i)=>{const d=document.createElement('div');d.className='chip';
   const lib=document.createElement('span');lib.textContent=`D${i+1} ${hms(t)} `;
@@ -1183,7 +1453,7 @@ function chips(){
   retire.onclick=()=>{if(debuts.length>1){debuts.splice(i,1);maj2()}};
   d.append(lib,txt,ecoute,retire);c.appendChild(d)});
  const f=document.createElement('span');
- f.textContent=`Fin ${hms(fin)} · ${coupes.filter(x=>x.on).length} coupe(s) actives`;c.appendChild(f);
+ f.textContent=`${coupes.filter(x=>x.on).length} coupe(s) actives`;c.appendChild(f);
  recapitule()}
 // resume de ce que la validation va rendre : la colonne de droite doit suffire
 // a decider d'envoyer, sans relire la piste
@@ -1215,7 +1485,78 @@ vId('couperIci').onclick=()=>{if(!reel)return;
  for(const [s0,s1] of blancs){if(Math.abs(a-s0)<0.3)a=s0+0.08;if(Math.abs(z-s1)<0.3)z=s1-0.08}
  if(z-a<0.05)return;
  coupes.push({a:+a.toFixed(3),b:+z.toFixed(3),type:'manuel',on:true,texte:'coupe ajoutée à la main'});maj2()};
+// ---- Étalonnage : trois choix par caméra ------------------------------
+// La table vient du serveur (scripts/etalonnages.json), la même que celle que
+// lit produire-split.py. La page n'écrit jamais un nom de .cube : elle envoie
+// une clé de cette table, et le serveur la refuse si elle n'y est pas.
+let TABLE_LUT={ordre:[],etalonnages:[],dossier:''};
+let etals={camera:'aucun',ecran:'aucun'};
+// vrai des que le choix vient de quelqu'un — du stockage ou du menu — et
+// non de la detection : la suggestion ne doit jamais ecraser une decision
+let etalsPoses=false;
+const SOURCE={A:'camera',B:'ecran'};
+fetch('/etalonnages.json').then(r=>r.json()).then(j=>{TABLE_LUT=j;remplirLuts();
+ if(reel)mesurerEtalonnage()}).catch(()=>{});
+function remplirLuts(){
+ const par={};for(const e of TABLE_LUT.etalonnages||[])par[e.cle]=e;
+ for(const [l,source] of Object.entries(SOURCE)){
+  const s=vId('lut'+l);s.textContent='';
+  for(const cle of TABLE_LUT.ordre||[]){
+   const e=par[cle];if(!e)continue;
+   // un fichier absent se dit tout de suite, pas au bout de dix minutes d'encodage
+   const o=new Option(e.nom+(e.present?'':' — fichier absent'),cle);
+   o.title=e.detail+(e.present?'':`\nFichier manquant : ${TABLE_LUT.dossier}/${e.fichier}`);
+   s.add(o)}
+  s.value=etals[source];
+  s.onchange=()=>{etals[source]=s.value;etalsPoses=true;sortie();voirLut(l)}}}
+// La mesure du rush : cinq images passées à signalstats, côté serveur, et le
+// résultat mis en cache sur (chemin, date, taille). On ne la relance pas en
+// changeant de choix dans le menu — elle décrit le rush, pas le choix.
+async function mesurerEtalonnage(){
+ for(const [l,source] of Object.entries(SOURCE)){
+  const bloc=vId('etal'+l),texte=vId('diag'+l);
+  if(!reel||(source==='ecran'&&!reel.ecran)){bloc.hidden=true;continue}
+  bloc.hidden=false;bloc.classList.remove('doute');
+  texte.className='diag';texte.textContent='Mesure du rush…';
+  vId('ctrl'+l).hidden=true;
+  const q=`lot=${encodeURIComponent(LOTP)}&reel=${encodeURIComponent(reel.id)}&source=${source}`;
+  let d=null;
+  try{const r=await fetch('/etalonnage?'+q);if(!r.ok)throw new Error(await r.text());
+      d=await r.json()}
+  catch(pb){texte.className='diag rate';texte.textContent='Mesure impossible.';continue}
+  if(!reel)return;                               // on a changé de reel entre-temps
+  texte.textContent=d.phrase||'—';
+  if(!d.sur){texte.className='diag doute';bloc.classList.add('doute')}
+  // la suggestion ne s'impose jamais à un choix déjà enregistré
+  if(!etalsPoses){
+   etals[source]=REGLES.etalonnageDefaut(d);vId('lut'+l).value=etals[source];
+   sortie()}
+  voirLut(l)}}
+// L'image de contrôle : une image fixe du rush avec la LUT posée par ffmpeg.
+// Appuyer dessus la retire, pour comparer. Pas d'encodage, pas d'attente.
+function voirLut(l){
+ const source=SOURCE[l],img=vId('ctrl'+l);
+ if(!reel||(source==='ecran'&&!reel.ecran))return void(img.hidden=true);
+ img.dataset.choix=etals[source];
+ img.src=`/etalonnage-apercu?lot=${encodeURIComponent(LOTP)}`+
+  `&reel=${encodeURIComponent(reel.id)}&source=${source}&choix=${etals[source]}`;
+ img.hidden=false}
+for(const l of ['A','B']){
+ const img=vId('ctrl'+l),source=SOURCE[l];
+ img.onerror=()=>{img.hidden=true;
+  const e=(TABLE_LUT.etalonnages||[]).find(x=>x.cle===etals[source]);
+  if(e&&!e.present){vId('diag'+l).className='diag rate';
+   vId('diag'+l).textContent=`LUT absente : ${TABLE_LUT.dossier}/${e.fichier}`}};
+ const nu=()=>{if(img.hidden||etals[source]==='aucun')return;
+  img.src=img.src.replace(/choix=[^&]*/,'choix=aucun');img.title='Rush sans la LUT'};
+ const habille=()=>{if(img.hidden)return;
+  img.src=img.src.replace(/choix=[^&]*/,'choix='+etals[source]);
+  img.title='Appuyer pour voir le rush sans la LUT'};
+ img.addEventListener('pointerdown',nu);
+ for(const ev of ['pointerup','pointerleave','pointercancel'])img.addEventListener(ev,habille)}
+
 vId('titre').addEventListener('input',sortie);
+vId('titrePosition').onchange=()=>sortie();
 vId('exporter').onclick=()=>envoyerProduction('/exporter');
 function chargerLot(){
 fetch('/lots/'+encodeURIComponent(LOTP)+'/reels.json?'+Date.now()).then(r=>r.ok?r.json():null).then(j=>{

@@ -282,6 +282,33 @@ dit(REGLES.cleEnvoi('P1-03','vmc')!==REGLES.cleEnvoi('P1-03','hmc'),'un format, 
 dit(REGLES.cleEnvoi('P1-03','vmc')===REGLES.cleEnvoi('P1-03','vmc'),'la cle est stable');
 dit(REGLES.cleEnvoi('P1','03-vmc')!==REGLES.cleEnvoi('P1-03','vmc'),'pas de telescopage');
 dit(REGLES.cleEnvoi('P1-03')===REGLES.cleEnvoi('P1-03','vmc'),'sans format : le vertical 50/50');
+
+// La sensibilite des blancs : un seul parametre change, la duree minimale
+// d'une pause, et les trois niveaux doivent donner trois listes differentes.
+const pauses=[[1.0,1.30],[3.0,3.40],[6.0,6.60],[9.0,9.20]];
+const l=REGLES.blancsDuNiveau(pauses,'leger'),
+      no=REGLES.blancsDuNiveau(pauses,'normal'),
+      s=REGLES.blancsDuNiveau(pauses,'serre');
+dit(l.length===1,'leger ne garde que la pause de 0,60 s, pas '+l.length);
+dit(no.length===2,'normal attrape aussi celle de 0,40 s, pas '+no.length);
+dit(s.length===3,'serre attrape celle de 0,30 s, pas '+s.length);
+dit(s.every(c=>c.b>c.a),'aucune coupe retournee');
+// la pause de 0,20 s n'existe a aucun niveau : le script ne la liste meme pas
+dit(s.every(c=>Math.abs(c.a-9.12)>0.001),'la pause trop courte reste dehors');
+// les marges : 0,12 s apres le dernier mot, 0,10 s avant le suivant
+dit(Math.abs(s[0].a-1.12)<1e-9&&Math.abs(s[0].b-1.20)<1e-9,'les marges de preparer-reels.py');
+dit(REGLES.blancsDuNiveau(null,'normal').length===0,'un rush sans blanc ne casse rien');
+dit(REGLES.blancsDuNiveau(pauses,'nimporte').length===no.length,'un niveau inconnu vaut normal');
+
+// L'etalonnage propose : celui de la mesure, et « Aucun » quand elle a echoue
+dit(REGLES.etalonnageDefaut({propose:'delog'})==='delog','la mesure decide');
+dit(REGLES.etalonnageDefaut({propose:null})==='aucun','mesure muette : on ne touche pas au rush');
+dit(REGLES.etalonnageDefaut(null)==='aucun','pas de mesure du tout : pareil');
+
+// La regle de temps ne sort qu'une fois zoome
+dit(REGLES.pisteEntiere(38,38),'au repos la piste est nue');
+dit(REGLES.pisteEntiere(38,37.4),'un arrondi de rien ne fait pas sortir la regle');
+dit(!REGLES.pisteEntiere(38,10),'zoome, la regle doit dire ou l on est');
 console.log('regles de la page : OK');
 """
         r = subprocess.run(['node', '-e', essai], capture_output=True, text=True)
