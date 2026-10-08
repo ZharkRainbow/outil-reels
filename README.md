@@ -90,6 +90,17 @@ Pour un tournage à une seule caméra, mets `-` à la place du second dossier.
 
 Le format du manifeste est documenté dans `exemple/reels.json`.
 
+Pour deux pistes déjà synchronisées et deux micros à entendre :
+
+```bash
+python3 scripts/preparer-reels.py "<dossier haut>" "<dossier bas>" \
+    --lot "Podcast" --deja-synchronisees --mixer-son
+```
+
+Chaque lot reste dans `lots/<nom>/`. Le mix alimente le proxy, la transcription
+et les deux modes de rendu ; les rushes ne sont pas modifiés. Sans `--mixer-son`,
+le son vient toujours de la caméra du haut.
+
 ### 2. Cadrer
 
 ```bash
@@ -104,7 +115,7 @@ le navigateur au fur et à mesure : tu peux fermer et revenir.
 
 ### 3. Exporter
 
-Le bouton **Exporter** met le rendu dans une file. Les exports passent un par un,
+Le bouton **Valider et envoyer en production** met le rendu dans une file. Les exports passent un par un,
 pour que dix rendus ne se disputent pas la machine. L'avancement s'affiche dans
 la page, et le détail va dans `outil/cadrages/<nom>.log`.
 
@@ -176,6 +187,7 @@ rien configurer.
 | `REELS_VOCABULAIRE` | `vocabulaire.json` | dictionnaire de correction |
 | `REELS_POLICE` / `REELS_POLICE_TITRE` | ZTNature | polices des sous-titres |
 | `REELS_COULEUR_CAPTIONS` / `REELS_COULEUR_TITRE` | `#FAD400` / `#2322E0` | couleurs |
+| `REELS_CADRAGES` | `outil/cadrages/` | cadrages enregistrés et journaux |
 | `REELS_PORT` | `8765` | port du serveur local |
 
 `python3 scripts/reglages.py` affiche les valeurs actives et ce qui manque.
@@ -244,19 +256,27 @@ MIT. Voir `LICENCE`.
 Pour des pistes Riverside (ou toute paire déjà alignée) qu'on veut juste couper et
 cadrer, sans sous-titres ni habillage :
 
-1. Découper chaque passage dans les deux pistes, avec la même durée et le même nom
-   `.MP4` dans deux dossiers. Mixer les deux micros dans la piste du haut, sinon
-   la voix de l'invité est muette.
-2. Écrire `lots/reels.json` avec `"decalage": 0.0` pour chaque reel (les pistes sont
-   déjà calées), puis lancer `preparer-reels.py <dossier haut> <dossier bas> --lot X --sortie X`.
-3. Ajouter au manifeste :
-   - `"formats": ["vmc"]`
-   - `"cadres": {"vmc_haut": {...}, "vmc": {...}}` pour le cadre fixe par défaut
-   - `"production": {"script": "produire-split.py", "sortie": "<dossier>"}`
-4. `python3 outil/serveur.py`, puis ouvrir `http://localhost:8765/outil/index.html?lot=reels`.
-   Le lien `outil/reels -> ../lots` doit exister (`ln -s ../lots outil/reels`).
-5. Régler le départ, la fin et les coupes, puis **Enregistrer le cadrage** : le reel est rendu
-   par `scripts/produire-split.py` et déposé dans le dossier de sortie. Le bouton « Reel suivant »
-   passe au suivant.
+1. Découper les mêmes passages dans deux dossiers, avec les mêmes noms `.MP4`.
+2. Préparer avec `--lot Podcast --deja-synchronisees --mixer-son` (commande ci-dessus).
+3. Ajouter à `lots/Podcast/reels.json` :
+   - `"formats": ["vmc"]` ;
+   - `"cadres": {"vmc_haut": {...}, "vmc": {...}}` pour les cadres fixes par défaut ;
+   - `"production": {"script": "produire-split.py", "sortie": "<dossier>"}`.
+4. Lancer `python3 outil/serveur.py`, puis ouvrir `http://localhost:8765/?lot=Podcast`.
+5. Régler début, fin et coupes, puis **Valider et envoyer en production**.
+   L'état du rendu apparaît sous le bouton ; **Reel suivant** (raccourci `N`)
+   permet de poursuivre. Les ✓ du menu indiquent les validations envoyées depuis
+   ce navigateur, pas une garantie de réussite du rendu.
 
-Les améliorations prévues sont décrites dans `docs/BRIEF-REFONTE-UX.md`.
+L'ancien `lots/reels.json` reste accessible avec `/?lot=reels`, sans lien symbolique.
+Une nouvelle préparation avec `--lot reels` reprend ses réglages dans `lots/reels/`.
+Le bouton secondaire **Exporter (un fichier par début)** apparaît dès qu'il y a
+plusieurs départs ; les deux modes de rendu produisent alors toutes les variantes.
+
+Sur la piste unique, utiliser le zoom pour lire les mots et glisser les départs.
+`Espace` lance la lecture, `←`/`→` déplacent d'une seconde (`Maj` : dix secondes),
+`I` ajoute un début, `O` pose la fin, `C` commence/termine une coupe.
+`Alt` + flèches déplace le cadre sélectionné.
+
+Les améliorations sont décrites dans `docs/BRIEF-REFONTE-UX.md` et leur vérification
+dans `docs/COMPTE-RENDU-REFONTE.md`.

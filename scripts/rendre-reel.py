@@ -34,6 +34,7 @@ incruster = import_module("incruster-captions")
 SCRIPTS = Path(__file__).parent
 SORTIE = reglages.SORTIE
 SRC_W, SRC_H = 3840, 2160
+ACCEL = ["-hwaccel", "videotoolbox"] if sys.platform == "darwin" else []
 IPS = 24000 / 1001
 # format -> taille finale, taille de chaque moitie, sens de l'assemblage
 # (hsolo et carre : une seule camera, pas de tablette)
@@ -158,7 +159,7 @@ def monter(d, debut, dst):
     if depart_ecran < 0:
         retard = f",tpad=start_duration={-depart_ecran:.3f}:start_mode=clone"
         depart_ecran = 0.0
-    gain = LUFS - sonie(d["camera"], debut, duree)
+    gain = LUFS - sonie(d.get("audio") or d["camera"], debut, duree)
 
     # Chaque image est reperee par son rang sur la grille du temps d'origine
     # (round(T*ips)), jamais par un compteur : apres le seek, la premiere image
@@ -190,7 +191,7 @@ def monter(d, debut, dst):
     if lay.get("toile"):
         tW, tH, tx, ty = lay["toile"]
         camera += f",pad={tW}:{tH}:{tx}:{ty}:black"
-    entrees = ["-hwaccel", "videotoolbox", "-ss", f"{debut:.3f}", "-t", f"{duree + 0.5:.3f}",
+    entrees = [*ACCEL, "-ss", f"{debut:.3f}", "-t", f"{duree + 0.5:.3f}",
                "-i", d["camera"]]
     if lay["b"]:
         chaine = ";".join([
@@ -198,10 +199,14 @@ def monter(d, debut, dst):
             f"[1:v:0]{rotation}fps=24000/1001{retard},crop={bw}:{bh}:'{bx}':'{by}':exact=1,"
             f"scale={bW}:{bH}:flags=lanczos,setsar=1[scr]",
             f"[cam][scr]{lay['pile']}=inputs=2," + selection, *son])
-        entrees += ["-hwaccel", "videotoolbox", "-ss", f"{depart_ecran:.3f}",
+        entrees += [*ACCEL, "-ss", f"{depart_ecran:.3f}",
                     "-t", f"{duree + 0.5:.3f}", "-i", d["ecran"]]
     else:
         chaine = ";".join([camera + "," + selection, *son])
+    if d.get("audio"):
+        index_audio = 2 if lay["b"] else 1
+        entrees += ["-ss", f"{debut:.3f}", "-i", d["audio"]]
+        chaine = chaine.replace("[0:a:0]", f"[{index_audio}:a:0]")
     r = subprocess.run([
         "ffmpeg", "-v", "error", "-y", *entrees,
         "-filter_complex", chaine, "-map", "[v]", "-map", "[son]",
@@ -331,7 +336,8 @@ def main():
     # "07 - Prenom Mon titre.mp4", ou simplement "07 - Mon titre.mp4"
     etiquettes = [reglages.PREFIXE, titre]
     reste = " ".join(x for x in etiquettes if x)
-    nom = f"{int(d['reel']):02d}" + (f" - {reste}" if reste else "")
+    ident = re.sub(r'[/:\\\x00-\x1f]', "-", str(d['reel']))
+    nom = (ident.zfill(2) if ident.isdecimal() else ident) + (f" - {reste}" if reste else "")
     faits = []
     for i, debut in enumerate(debuts, 1):
         etiquette = f"{nom} (debut {i})" if len(debuts) > 1 else nom

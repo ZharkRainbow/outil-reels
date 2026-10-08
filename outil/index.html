@@ -146,7 +146,7 @@ main,body.reels main{flex:1;min-height:0;height:auto;grid-template-columns:minma
   </aside>
 </main>
 
-<video id="vid" src="proxy.mp4" playsinline preload="auto" style="position:fixed;left:-4px;top:-4px;width:2px;height:2px;opacity:.01;pointer-events:none"></video>
+<video id="vid" playsinline preload="auto" style="position:fixed;left:-4px;top:-4px;width:2px;height:2px;opacity:.01;pointer-events:none"></video>
 <div class="piste">
   <label class="zoom">Zoom de la piste <input id="zoom" type="range" min="1" max="12" value="1" step="1"></label>
   <div class="timeline"><div class="rail" id="rail"><div class="tete" id="tete"></div></div></div>
@@ -227,7 +227,7 @@ function cadrageA(t){
  return p[0]}
 function apercu(){
  const f=FORMATS[fmt];
- if(cvs.width!==f.W){cvs.width=f.W;cvs.height=f.H}
+ if(cvs.width!==f.W||cvs.height!==f.H){cvs.width=f.W;cvs.height=f.H}
  ctx.fillStyle=f.fond;ctx.fillRect(0,0,f.W,f.H);
  let c = (joue && points.length) ? cadrageA(vid.currentTime)||{A:crop.A,B:crop.B} : {A:crop.A,B:crop.B};
  const s=suiviA(vid.currentTime);if(s)c={...c,A:s};
@@ -258,7 +258,7 @@ for(const k of ['A','B']){
   c.h=c.w/ratio(k);c.x=cx-c.w/2;c.y=cy-c.h/2;clamp(k);boites();garder()},{passive:false});
 }
 addEventListener('keydown',e=>{
- if(e.target.closest('input,textarea,select,[contenteditable]')||e.ctrlKey||e.metaKey)return;
+ if(e.target.closest?.('input,textarea,select,[contenteditable]')||e.ctrlKey||e.metaKey)return;
  if(e.code==='Space'){e.preventDefault();vId('play').click();return}
  if(!e.altKey){
   const actions={i:'debutIci',o:'finIci',c:'couperIci',n:'reelSuiv',ArrowLeft:e.shiftKey?'m10':'m1',ArrowRight:e.shiftKey?'p10':'p1'};
@@ -336,7 +336,7 @@ function sortie(){
  const d={format:fmt,passage:nomPassage(),source:{w:SRC_W,h:SRC_H},
   points:[...points].filter(dansPassage).sort((a,b)=>a.t-b.t)
    .map(p=>({t:+p.t.toFixed(2),glisse:!!p.glisse,camera:p.A,ecran:p.B}))};
- if(reel)Object.assign(d,{reel:reel.id,lot:LOT.lot||null,sortie:LOT.sortie||null,visage:visage,
+ if(reel)Object.assign(d,{reel:reel.id,lot:LOT.lot||null,lot_id:LOTP,rendu:LOT.rendu,audio:reel.audio||null,sortie:LOT.sortie||null,visage:visage,
   camera:reel.camera,ecran:reel.ecran,decalage:reel.decalage,
   retourner_ecran:!!reel.retourner_ecran,
   debuts:debuts.map(t=>+t.toFixed(3)),fin:+fin.toFixed(3),titre:vId('titre').value.trim(),
@@ -388,6 +388,7 @@ PASSAGES.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.te
 function changerReel(pas){if(chargement)return;const i=selP.selectedIndex+pas;if(i<0||i>=selP.options.length)return;selP.selectedIndex=i;selP.onchange()}
 vId('reelSuiv').onclick=()=>changerReel(1);vId('reelPrec').onclick=()=>changerReel(-1);
 selP.onchange=()=>{
+ if(chargement){selP.value=reel.id;return}
  if(REELS)return chargerReel(selP.value);
  if(selP.value===''){borneA=0;borneB=DUREE}
  else{const p=PASSAGES[+selP.value];borneA=p[1];borneB=p[2]}
@@ -427,6 +428,7 @@ LOTP=LOTP||'exemple';
 try{localStorage.setItem('recadrage-lot',LOTP)}catch(e){}
 vId('lotSel').add(new Option(LOTP,LOTP));
 vId('lotSel').value=LOTP;
+fetch('/lots').then(r=>r.json()).then(lots=>{const s=vId('lotSel');s.textContent='';for(const l of lots)s.add(new Option(l.nom,l.id));s.value=LOTP}).catch(()=>{});
 vId('lotSel').onchange=e=>{location.search='?lot='+encodeURIComponent(e.target.value)};
 const CLE='recadrage-reels-v1'+(LOTP!=='reels'?'-'+LOTP:'');
 // centre du cadre suivi a l'instant t (pixels source), largeur donnee par le format
@@ -460,6 +462,7 @@ function premiereParole(){
 // colle un debut juste avant la reprise de parole la plus proche
 function caler(t){
  let best=t,ecart=0.4;
+ for(const [a] of mots){const d=Math.abs(t-a);if(d<ecart){ecart=d;best=Math.max(0,a-0.06)}}
  for(const [,b] of blancs){const d=Math.abs(t-b);if(d<ecart){ecart=d;best=Math.max(0,b-0.06)}}
  return best}
 // duree du fichier exporte : les coupes se chevauchent (une reprise contient
@@ -471,12 +474,13 @@ function dureeFinale(t){
  return Math.max(0,d)}
 function fenetre(){return Math.min(DUREE,Math.max(20,...debuts.map(t=>t+8)))}
 async function chargerReel(id){
- garder();chargement=true;
+ garder();vid.pause();chargement=true;
  reel=REELS.find(r=>String(r.id)===String(id));selP.value=id;
  const d=await fetch(reel.donnees+'?'+Date.now()).then(r=>r.json()).catch(()=>({}));
  const e=etats[reel.id]||{};
- mots=d.mots||[];blancs=d.blancs||[];visage=d.visage||null;suivi=d.suivi||null;vus={};
- if(!reel.ecran&&!FORMATS[fmt].a||!reel.ecran&&FORMATS[fmt].b)choisirFormat('hsolo');
+ crop.A={x:400,y:120,w:2200,h:1956};crop.B={x:800,y:120,w:2200,h:1956};
+ mots=d.mots||[];blancs=d.blancs||[];visage=d.visage||null;suivi=LOT.suivi?d.suivi||null:null;vus={};
+ if(!reel.ecran&&FORMATS[fmt].b)choisirFormat('hsolo');
  const gardees=new Set(e.coupesGardees||[]);
  coupes=(d.coupes||[]).map(c=>({...c,on:(c.on!==false)&&!gardees.has(c.a.toFixed(2))}))
   .concat((e.manuelles||[]).map(c=>({...c})));
@@ -495,8 +499,8 @@ async function chargerReel(id){
  else if(!reel.ecran){crop.A=cadreDefaut()}
  else if(e.cadre){crop.A={...e.cadre.A};crop.B={...e.cadre.B};
   if(!!e.retourne!==!!reel.retourner_ecran){crop.B.x=SRC_W-crop.B.x-crop.B.w;crop.B.y=SRC_H-crop.B.y-crop.B.h}}
- if(LOT.cadres&&!duMien.length&&LOT.cadres[fmt])crop.B={...LOT.cadres[fmt]};
- if(LOT.cadres&&!duMien.length&&LOT.cadres[fmt+'_haut'])crop.A={...LOT.cadres[fmt+'_haut']};
+ if(LOT.cadres&&!duMien.length&&!e.cadre&&LOT.cadres[fmt])crop.B={...LOT.cadres[fmt]};
+ if(LOT.cadres&&!duMien.length&&!e.cadre&&LOT.cadres[fmt+'_haut'])crop.A={...LOT.cadres[fmt+'_haut']};
  chargement=false;boites();
  vid.src=reel.proxy;vid.load();
  table();rail();mini();chips();maj();
@@ -543,7 +547,8 @@ function chips(){
  f.textContent=`Fin ${hms(fin)} · ${coupes.filter(x=>x.on).length} coupe(s) actives`;c.appendChild(f)}
 vId('debutIci').onclick=()=>{if(!reel)return;
  debuts.push(caler(vid.currentTime));debuts.sort((a,b)=>a-b);maj2()};
-vId('finIci').onclick=()=>{if(!reel)return;fin=vid.currentTime;maj2()};
+vId('finIci').onclick=()=>{if(!reel)return;const t=vid.currentTime;let ecart=.4;fin=t;
+ for(const [,b] of mots){if(Math.abs(t-b)<ecart){ecart=Math.abs(t-b);fin=Math.min(DUREE,b+.06)}}maj2()};
 // coupe a la main : les bords se posent dans le blanc le plus proche s'il y en a un
 vId('couperIci').onclick=()=>{if(!reel)return;
  const t=vid.currentTime,b=vId('couperIci');
@@ -564,10 +569,12 @@ function suivre(nom){
  suivre.t=setInterval(async()=>{try{
   const j=await fetch('/export-etat?nom='+encodeURIComponent(nom)).then(r=>r.json());
   vId('etat').textContent=j.texte;if(j.fini)clearInterval(suivre.t)}catch(err){}},1500)}
-fetch(LOTP+'/reels.json?'+Date.now()).then(r=>r.ok?r.json():null).then(j=>{
- if(!j||!j.reels||!j.reels.length)return;
- REELS=j.reels;LOT={lot:j.lot,sortie:j.sortie,cadres:j.cadres||null};document.body.classList.add('reels');selP.textContent='';
- vId('lotSel').selectedOptions[0].textContent=j.lot||LOTP;
+fetch('/lots/'+encodeURIComponent(LOTP)+'/reels.json?'+Date.now()).then(r=>r.ok?r.json():null).then(j=>{
+ if(!j||!j.reels||!j.reels.length)throw new Error('Lot absent ou vide');
+ const base=new URL('/lots/'+encodeURIComponent(LOTP)+'/',location.href);
+ const resoudre=p=>new URL(LOTP==='reels'?p.replace(/^reels\//,''):p,base).href;
+ REELS=j.reels.map(r=>({...r,proxy:resoudre(r.proxy),donnees:resoudre(r.donnees)}));LOT={lot:j.lot,sortie:j.sortie,rendu:j.rendu,suivi:j.suivi===true,cadres:j.cadres||null};document.body.classList.add('reels');selP.textContent='';
+ if(vId('lotSel').selectedOptions[0])vId('lotSel').selectedOptions[0].textContent=j.lot||LOTP;
  if(j.formats){
   vId('fmt').style.display=j.formats.length===1?'none':'';
   [...vId('fmt').children].forEach(b=>b.style.display=j.formats.includes(b.dataset.f)?'block':'none');
@@ -575,8 +582,8 @@ fetch(LOTP+'/reels.json?'+Date.now()).then(r=>r.ok?r.json():null).then(j=>{
   if(REELS[0].ecran){const t=document.querySelectorAll('.src h2');
    t[0].firstChild.nodeValue='Haut — cadre fixe ';t[1].firstChild.nodeValue='Bas — cadre a regler '}
   choisirFormat(j.formats[0])}
- if(REELS.every(r=>!r.ecran)){document.body.classList.add('solo');choisirFormat('hsolo')}
+ if(REELS.every(r=>!r.ecran)){document.body.classList.add('solo');if(!j.formats)choisirFormat('hsolo')}
  REELS.forEach(r=>{const o=document.createElement('option');o.value=r.id;
   o.textContent=`${r.nom} (${hms(r.duree)})`;selP.appendChild(o)});
- marquerReels();chargerReel(REELS[0].id)}).catch(()=>{});
+ marquerReels();chargerReel(REELS[0].id)}).catch(err=>{vId('etat').textContent='Chargement impossible : '+err.message});
 </script></body></html>

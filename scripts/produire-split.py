@@ -6,11 +6,12 @@ la finition.
 
     python3 produire-split.py "outil/cadrages/<nom>.json" "<dossier de sortie>"
 
-Le son vient de la camera du haut (y mixer les deux micros a la preparation).
+Le son vient du mix préparé avec --mixer-son, sinon de la caméra du haut.
 Les cadres de l'outil sont exprimes dans le repere de la camera du haut : le
 cadre du bas est remis a l'echelle de sa propre source.
 """
 import json
+import platform
 import re
 import subprocess
 import sys
@@ -26,9 +27,7 @@ def largeur(chemin):
     return int(r.stdout.strip())
 
 
-def main():
-    d = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    sortie = Path(sys.argv[2])
+def rendre(d, sortie):
     sortie.mkdir(parents=True, exist_ok=True)
     cam, ecran = RACINE / d["camera"], RACINE / d["ecran"]
     a, b = d["debuts"][0], d["fin"]
@@ -42,31 +41,52 @@ def main():
         gardes.append((t, b))
 
     p = d["points"][0]
-    h = p["camera"]
+    k = largeur(cam) / d["source"]["w"]
+    h = {z: round(p["camera"][z] * k) for z in ("x", "y", "w", "h")}
     k = largeur(ecran) / d["source"]["w"]
     e = {z: round(p["ecran"][z] * k) for z in ("x", "y", "w", "h")}
+    if not gardes:
+        raise ValueError("Le montage est vide : vérifier début, fin et coupes")
     morceaux = []
+    decal = d.get("decalage") or 0
+    alignement = f"trim=start={decal},setpts=PTS-STARTPTS" if decal >= 0 else f"tpad=start_duration={-decal}:start_mode=clone"
+    rotation = ",hflip,vflip" if d.get("retourner_ecran") else ""
+    audio = "2:a" if d.get("audio") else "0:a"
     for i, (s, f) in enumerate(gardes):
         morceaux.append(
             f"[0:v]trim={s}:{f},setpts=PTS-STARTPTS,crop={h['w']}:{h['h']}:{h['x']}:{h['y']},"
             f"scale=1080:960,setsar=1[h{i}];"
-            f"[1:v]trim={s}:{f},setpts=PTS-STARTPTS,crop={e['w']}:{e['h']}:{e['x']}:{e['y']},"
+            f"[1:v]{alignement}{rotation},trim={s}:{f},setpts=PTS-STARTPTS,crop={e['w']}:{e['h']}:{e['x']}:{e['y']},"
             f"scale=1080:960,setsar=1[b{i}];"
             f"[h{i}][b{i}]vstack,fps=30,format=yuv420p[v{i}];"
-            f"[0:a]atrim={s}:{f},asetpts=PTS-STARTPTS[a{i}];")
+            f"[{audio}]atrim={s}:{f},asetpts=PTS-STARTPTS[a{i}];")
     filtre = "".join(morceaux) + "".join(f"[v{i}][a{i}]" for i in range(len(gardes))) \
         + f"concat=n={len(gardes)}:v=1:a=1[v][a]"
 
     titre = re.sub(r"[^\w\s'-]", "", d.get("titre", "")).strip()
-    nom = f"{d['reel']} - {titre}.mp4" if titre else f"{d['reel']}.mp4"
-    for vieux in sortie.glob(f"{d['reel']} - *.mp4"):
-        vieux.unlink()
+    ident = re.sub(r'[/:\\\x00-\x1f]', '-', str(d['reel']))
+    nom = f"{ident} - {titre}.mp4" if titre else f"{ident}.mp4"
     print(f"{len(gardes)} morceau(x), {sum(f - s for s, f in gardes):.1f} s -> {nom}", flush=True)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(cam), "-i", str(ecran),
-                    "-filter_complex", filtre, "-map", "[v]", "-map", "[a]",
-                    "-c:v", "h264_videotoolbox", "-b:v", "12M", "-c:a", "aac", "-b:a", "192k",
+                    *(["-i", d["audio"]] if d.get("audio") else []),
+                    "-filter_complex_threads", "1", "-filter_complex", filtre, "-map", "[v]", "-map", "[a]",
+                    "-c:v", "h264_videotoolbox" if platform.system() == "Darwin" else "libx264", "-b:v", "12M", "-c:a", "aac", "-b:a", "192k",
                     "-movflags", "+faststart", str(sortie / nom)], check=True)
     print(f"Reel pret : {sortie / nom}", flush=True)
+    return sortie / nom
+
+
+def main():
+    d = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    sortie = Path(sys.argv[2])
+    debuts = d["debuts"]
+    faits = []
+    for i, debut in enumerate(debuts, 1):
+        version = dict(d, debuts=[debut])
+        if len(debuts) > 1:
+            version["reel"] = f"{d['reel']} (debut {i})"
+        faits.append(rendre(version, sortie))
+    print("Reels prêts : " + ", ".join(str(p) for p in faits), flush=True)
 
 
 if __name__ == "__main__":
