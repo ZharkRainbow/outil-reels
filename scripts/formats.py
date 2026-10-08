@@ -46,3 +46,22 @@ def nom_fichier(cle):
     """Ce que le nom du reel rendu porte, pour que deux formats du meme reel
     ne s'ecrasent pas dans le meme dossier."""
     return trouver(cle)["fichier"]
+
+
+def dossier(cle):
+    """Ou le rendu habille range le fichier : « Vertical » ou « Horizontal »."""
+    return trouver(cle)["dossier"]
+
+
+def habillage(cle):
+    """Reperes des sous-titres et du bandeau titre, en fraction de la hauteur.
+
+    Ils vivent dans la table avec la geometrie, et non dans chaque moteur : un
+    format empile pose son titre sur la couture entre ses deux zones, et la
+    couture n'est pas au meme endroit en 50/50 et en 80/20."""
+    return dict(trouver(cle)["habillage"])
+
+
+def une_camera(cle):
+    """Vrai si le format n'a qu'une zone : rien a assembler, rien a decaler."""
+    return "b" not in trouver(cle)["zones"]

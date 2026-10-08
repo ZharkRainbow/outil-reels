@@ -27,6 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 reglages = import_module("reglages")
+formats = import_module("formats")
 points = import_module("rendre-depuis-points")
 captions = import_module("faire-captions")
 incruster = import_module("incruster-captions")
@@ -36,23 +37,15 @@ SORTIE = reglages.SORTIE
 SRC_W, SRC_H = 3840, 2160
 ACCEL = ["-hwaccel", "videotoolbox"] if sys.platform == "darwin" else []
 IPS = 24000 / 1001
-# format -> taille finale, taille de chaque moitie, sens de l'assemblage
-# (hsolo et carre : une seule camera, pas de tablette)
-FORMATS = {"vmc": dict(a=(1080, 960), b=(1080, 960), pile="vstack"),
-           "hmc": dict(a=(720, 1080), b=(1200, 1080), pile="hstack"),
-           "hsolo": dict(a=(1920, 1080), b=None, pile=None),
-           # carre (nom historique) : la video 16:9 d'origine au centre d'une toile
-           # verticale 1080x1920, bandes noires dessus et dessous
-           "carre": dict(a=(1080, 608), b=None, pile=None, toile=(1080, 1920, 0, 656))}
-DOSSIERS = {"vmc": "Vertical", "hmc": "Horizontal", "hsolo": "Horizontal", "carre": "Vertical"}
-# Habillage des formats a une camera.
-# Horizontal : sous-titres a mi-hauteur, du cote libre de la personne, fixes pour
-# toute la prise (a gauche s'il est a droite, a droite s'il est a gauche, coupes
-# en deux autour de lui s'il est au centre). Vertical : video d'origine entre deux
-# bandes noires, titre au-dessus pendant toute la video, sous-titres en dessous.
-HABILLAGE_SEUL = {"hsolo": dict(cap_y=0.50, cap_taille=0.042, titre_y=0.09, cote_libre=True),
-                  "carre": dict(cap_y=0.695, cap_taille=0.024, titre_y=0.25,
-                                titre_taille=0.032, titre_duree=0, titre_deux_lignes=True)}
+# La geometrie, le dossier de rangement et les reperes d'habillage viennent de
+# scripts/formats.json, comme pour la page et le rendu brut. Tant que ce script
+# gardait sa propre table, il ne connaissait que quatre formats sur dix : la page
+# proposait le 80/20 et le rendu par defaut sortait « KeyError: v8020 ». Il
+# donnait aussi au carre une toile 1080x1920, quand la page, le rendu brut et le
+# README disent 1080x1080.
+# Un point de cadrage porte un cadre « camera » et un cadre « ecran » ; la table
+# dit lequel alimente quelle zone, et depuis quel rush.
+ZONE = {"a": "A", "b": "B"}
 LUFS = -14.0
 FONDU = 0.005            # 5 ms a chaque jointure : pas de clic, rien d'audible
 # Vocabulaire : on passe par le dictionnaire commun, celui de
@@ -121,17 +114,22 @@ def visage_median(d):
 
 
 def cadrages(d):
-    """Cadrages camera (et ecran) aux proportions du format, en pixels pairs."""
+    """Cadrages de chaque zone du format, aux bonnes proportions, en pixels pairs.
+
+    Les zones et leur source sont lues dans la table : le vertical consulting
+    prend ainsi ses DEUX cadrages dans le rush du haut, et non un dans chaque.
+    """
     # l'outil peut envoyer des tailles a virgule : ffmpeg veut des pixels pairs
     pair = lambda v: int(round(v / 2)) * 2
-    lay = FORMATS[d.get("format", "vmc")]
-    aW, aH = lay["a"]
+    cle = d.get("format", "vmc")
+    zones = dict(formats.zones(cle))
     # Les cadres arrivent dans le repere de l'outil (d["source"], 3840 de large).
     # Sur un rush 1080p, les reprendre tels quels donne un crop plus grand que
     # l'image, et ffmpeg refuse. Le rendu brut applique deja ce facteur.
     reference = (d.get("source") or {}).get("w") or SRC_W
     srcA = taille_source(d["camera"])
-    srcB = taille_source(d["ecran"]) if d.get("ecran") else srcA
+    source = {"camera": srcA,
+              "ecran": taille_source(d["ecran"]) if d.get("ecran") else srcA}
 
     def cadre(c, src):
         W, H = src
@@ -142,20 +140,24 @@ def cadrages(d):
         q["y"] = max(0, min(q["y"], H - q["h"]))
         return q
 
+    def aux_proportions(p, nom):
+        """Le cadre du point pour cette zone, s'il a bien ses proportions."""
+        z = zones[nom]
+        c = p["camera"] if nom == "a" else p.get("ecran")
+        if not c or abs(c["w"] / c["h"] - z["w"] / z["h"]) >= 0.03:
+            return None
+        return cadre(c, source[z["source"]])
+
     # l'outil garde les cadres de plusieurs formats : on prend ceux aux bonnes proportions
     pts = []
     for p in d.get("points", []):
-        if abs(p["camera"]["w"] / p["camera"]["h"] - aW / aH) >= 0.03:
+        q = {ZONE[nom]: aux_proportions(p, nom) for nom in zones}
+        if any(v is None for v in q.values()):
             continue
-        if lay["b"]:
-            bW, bH = lay["b"]
-            if not p.get("ecran") or abs(p["ecran"]["w"] / p["ecran"]["h"] - bW / bH) >= 0.03:
-                continue
-        pts.append({"t": p["t"], "glisse": p.get("glisse", False),
-                    "A": cadre(p["camera"], srcA),
-                    "B": cadre(p.get("ecran") or p["camera"], srcB)})
-    if not pts and not lay["b"]:
-        # une camera sans cadrage pose : le plan entier, dans les deux formats
+        q.setdefault("B", q["A"])      # format a une zone : rien a empiler
+        pts.append({"t": p["t"], "glisse": p.get("glisse", False), **q})
+    if not pts and formats.une_camera(cle):
+        # une camera sans cadrage pose : le plan entier
         entier = {"x": 0, "y": 0, "w": pair(srcA[0]), "h": pair(srcA[1])}
         pts = [{"t": 0, "glisse": False, "A": entier, "B": entier}]
     if not pts:
@@ -168,14 +170,10 @@ def monter(d, debut, dst):
     parts = morceaux(debut, fin, d.get("coupes", []))
     if not parts:
         raise RuntimeError("tout est coupe entre ce debut et la fin")
-    lay = FORMATS[d.get("format", "vmc")]
-    aW, aH = lay["a"]
-    bW, bH = lay["b"] or lay["a"]
+    cle = d.get("format", "vmc")
+    f_ = formats.trouver(cle)
+    zones = formats.zones(cle)
     pts = cadrages(d)
-    aw, ah = points.taille(pts, "A")
-    bw, bh = points.taille(pts, "B")
-    ax, ay = (points.expression(pts, "A", k, debut) for k in ("x", "y"))
-    bx, by = (points.expression(pts, "B", k, debut) for k in ("x", "y"))
 
     duree = fin - debut
     depart_ecran = debut + d.get("decalage", 0.0)
@@ -211,27 +209,41 @@ def monter(d, debut, dst):
     son.append("".join(f"[p{i}]" for i in range(len(parts)))
                + f"concat=n={len(parts)}:v=0:a=1,volume={gain:.2f}dB,alimiter=limit=0.89[son]")
     selection = f"select='{garde}',setpts='round(({horodatage})*1001/24000/TB)'[v]"
-    camera = (f"[0:v:0]fps=24000/1001,crop={aw}:{ah}:'{ax}':'{ay}':exact=1,"
-              f"scale={aW}:{aH}:flags=lanczos,setsar=1")
-    if lay.get("toile"):
-        tW, tH, tx, ty = lay["toile"]
-        camera += f",pad={tW}:{tH}:{tx}:{ty}:black"
+    # Une zone posee par zone de la table : le meme chemin sert les dix formats,
+    # empiles, cote a cote ou a une seule camera. La premiere zone est agrandie
+    # aux dimensions du format par « pad », les suivantes posees par-dessus.
+    # On ne part PAS d'un fond « color » : les horodatages du montage doivent
+    # rester ceux du rush, sinon le select ci-dessus decale tout d'une image.
+    def etage(nom, z):
+        """Le rush de cette zone, recadre et mis a l'echelle de la zone."""
+        k = ZONE[nom]
+        w, h = points.taille(pts, k)
+        x, y = (points.expression(pts, k, axe, debut) for axe in ("x", "y"))
+        # seul le second rush porte le retournement de la tablette et son calage
+        devant = rotation if z["source"] == "ecran" else ""
+        apres_fps = retard if z["source"] == "ecran" else ""
+        return (f"[{flux[z['source']]}]{devant}fps=24000/1001{apres_fps},"
+                f"crop={w}:{h}:'{x}':'{y}':exact=1,"
+                f"scale={z['w']}:{z['h']}:flags=lanczos,setsar=1")
+
     entrees = [*ACCEL, "-ss", f"{debut:.3f}", "-t", f"{duree + 0.5:.3f}",
                "-i", d["camera"]]
-    if lay["b"]:
-        chaine = ";".join([
-            camera + "[cam]",
-            f"[1:v:0]{rotation}fps=24000/1001{retard},crop={bw}:{bh}:'{bx}':'{by}':exact=1,"
-            f"scale={bW}:{bH}:flags=lanczos,setsar=1[scr]",
-            f"[cam][scr]{lay['pile']}=inputs=2," + selection, *son])
+    besoin_ecran = any(z["source"] == "ecran" for _, z in zones)
+    if besoin_ecran:
         entrees += [*ACCEL, "-ss", f"{depart_ecran:.3f}",
                     "-t", f"{duree + 0.5:.3f}", "-i", d["ecran"]]
-    else:
-        chaine = ";".join([camera + "," + selection, *son])
+    flux = {"camera": "0:v:0", "ecran": "1:v:0"}
+    (nom0, z0), autres = zones[0], zones[1:]
+    fond = f"pad={f_['W']}:{f_['H']}:{z0['x']}:{z0['y']}:color={formats.fond(cle)}"
+    branches, dessus = [etage(nom0, z0) + f",{fond}[mont0]"], "mont0"
+    for n, (nom, z) in enumerate(autres, 1):
+        branches.append(etage(nom, z) + f"[z{nom}]")
+        branches.append(f"[{dessus}][z{nom}]overlay={z['x']}:{z['y']}[mont{n}]")
+        dessus = f"mont{n}"
+    chaine = ";".join([*branches, f"[{dessus}]" + selection, *son])
     if d.get("audio"):
-        index_audio = 2 if lay["b"] else 1
         entrees += ["-ss", f"{debut:.3f}", "-i", d["audio"]]
-        chaine = chaine.replace("[0:a:0]", f"[{index_audio}:a:0]")
+        chaine = chaine.replace("[0:a:0]", f"[{2 if besoin_ecran else 1}:a:0]")
     r = subprocess.run([
         "ffmpeg", "-v", "error", "-y", *entrees,
         "-filter_complex", chaine, "-map", "[v]", "-map", "[son]",
@@ -347,7 +359,11 @@ JARGON |= {v.lower() for v in vocabulaire.MOT_A_MOT.values()}
 def main():
     d = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     format_ = d.get("format", "vmc")
-    if not d.get("points") and FORMATS[format_]["b"]:
+    try:
+        formats.trouver(format_)
+    except ValueError as pb:
+        sys.exit(str(pb))
+    if not d.get("points") and not formats.une_camera(format_):
         sys.exit("Aucun cadrage pose : pose au moins un cadrage avant d'exporter.")
     debuts = d.get("debuts") or [0.0]
     # rangement : <sortie>/Vertical/01 - <titre>.mp4
@@ -356,7 +372,7 @@ def main():
         # dans SORTIE, pas a cote : SORTIE.parent, c'est la racine du depot,
         # et "sortie": "Mes reels" y faisait apparaitre un dossier de rendus
         racine = SORTIE / d["sortie"]
-    dossier = racine / DOSSIERS[format_]
+    dossier = racine / formats.dossier(format_)
     dossier.mkdir(parents=True, exist_ok=True)
     d["titre"] = majuscule(d.get("titre", "").strip())
     titre = re.sub(r'[/:\\]', "-", d["titre"])
@@ -380,7 +396,7 @@ def main():
             corriger(srt)
             relire(srt)
             dire(f"{etiquette} : incrustation (3/3)...")
-            hab = HABILLAGE_SEUL.get(format_) or points.HABILLAGE[format_]
+            hab = formats.habillage(format_)
             cmd = ["python3", str(SCRIPTS / "incruster-captions.py"), str(brut), str(srt),
                    str(final), "--y", str(hab["cap_y"]), "--taille", str(hab["cap_taille"])]
             if "titre_taille" in hab:

@@ -13,7 +13,13 @@
   "deux_cameras : propose par defaut sur un lot a deux cameras. Le manifeste du",
   "             lot peut restreindre la liste avec sa cle \"formats\".",
   "fichier    : ce que le nom du reel rendu porte, pour que deux formats du meme",
-  "             reel ne s'ecrasent pas."
+  "             reel ne s'ecrasent pas.",
+  "dossier    : ou le rendu habille range le fichier.",
+  "habillage  : ou le rendu habille pose les sous-titres et le bandeau titre,",
+  "             en fraction de la HAUTEUR du format (0,5 = milieu de l'image).",
+  "             Sur les formats empiles, le titre tombe sur la couture entre les",
+  "             deux zones et les sous-titres juste au-dessus : les deux reperes",
+  "             suivent donc la couture quand elle bouge d'un format a l'autre."
  ],
 
  "ordre": ["vmc", "v8020", "v7030", "hmc", "h5050", "vcons",
@@ -24,6 +30,7 @@
    "nom": "Vertical 50/50", "fichier": "vertical 50-50", "deux_cameras": true,
    "detail": "1080 × 1920 — deux caméras empilées, moitié-moitié",
    "W": 1080, "H": 1920, "fond": "#D4CCBE",
+   "dossier": "Vertical", "habillage": {"cap_y": 0.4513, "cap_taille": 0.023, "titre_y": 0.4997},
    "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 960, "source": "camera"},
              "b": {"x": 0, "y": 960, "w": 1080, "h": 960, "source": "ecran"}}
   },
@@ -31,6 +38,7 @@
    "nom": "Vertical 80/20", "fichier": "vertical 80-20", "deux_cameras": true,
    "detail": "1080 × 1920 — haut 80 %, bas 20 %",
    "W": 1080, "H": 1920, "fond": "#000000",
+   "dossier": "Vertical", "habillage": {"cap_y": 0.7516, "cap_taille": 0.023, "titre_y": 0.8},
    "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 1536, "source": "camera"},
              "b": {"x": 0, "y": 1536, "w": 1080, "h": 384, "source": "ecran"}}
   },
@@ -38,6 +46,7 @@
    "nom": "Vertical 70/30", "fichier": "vertical 70-30", "deux_cameras": true,
    "detail": "1080 × 1920 — haut 70 %, bas 30 %",
    "W": 1080, "H": 1920, "fond": "#000000",
+   "dossier": "Vertical", "habillage": {"cap_y": 0.6516, "cap_taille": 0.023, "titre_y": 0.7},
    "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 1344, "source": "camera"},
              "b": {"x": 0, "y": 1344, "w": 1080, "h": 576, "source": "ecran"}}
   },
@@ -45,6 +54,7 @@
    "nom": "Horizontal", "fichier": "horizontal", "deux_cameras": true,
    "detail": "1920 × 1080 — caméra à gauche sur 720, écran à droite",
    "W": 1920, "H": 1080, "fond": "#000000",
+   "dossier": "Horizontal", "habillage": {"cap_y": 0.88, "cap_taille": 0.032, "titre_y": 0.792, "halo": true},
    "zones": {"a": {"x": 0, "y": 0, "w": 720, "h": 1080, "source": "camera"},
              "b": {"x": 720, "y": 0, "w": 1200, "h": 1080, "source": "ecran"}}
   },
@@ -52,6 +62,7 @@
    "nom": "Horizontal 50/50", "fichier": "horizontal 50-50", "deux_cameras": true,
    "detail": "1920 × 1080 — deux caméras côte à côte, moitié-moitié",
    "W": 1920, "H": 1080, "fond": "#000000",
+   "dossier": "Horizontal", "habillage": {"cap_y": 0.88, "cap_taille": 0.032, "titre_y": 0.792, "halo": true},
    "zones": {"a": {"x": 0, "y": 0, "w": 960, "h": 1080, "source": "camera"},
              "b": {"x": 960, "y": 0, "w": 960, "h": 1080, "source": "ecran"}}
   },
@@ -59,6 +70,7 @@
    "nom": "Vertical consulting", "fichier": "vertical consulting", "deux_cameras": true,
    "detail": "1080 × 1920 — deux cadrages du même rush, empilés",
    "W": 1080, "H": 1920, "fond": "#000000",
+   "dossier": "Vertical", "habillage": {"cap_y": 0.4513, "cap_taille": 0.023, "titre_y": 0.4997},
    "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 960, "source": "camera"},
              "b": {"x": 0, "y": 960, "w": 1080, "h": 960, "source": "camera"}}
   },
@@ -66,6 +78,7 @@
    "nom": "Vertical 65/35", "fichier": "vertical 65-35", "deux_cameras": true,
    "detail": "1080 × 1920 — haut 65 %, bas 35 %",
    "W": 1080, "H": 1920, "fond": "#000000",
+   "dossier": "Vertical", "habillage": {"cap_y": 0.6016, "cap_taille": 0.023, "titre_y": 0.65},
    "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 1248, "source": "camera"},
              "b": {"x": 0, "y": 1248, "w": 1080, "h": 672, "source": "ecran"}}
   },
@@ -73,6 +86,7 @@
    "nom": "Vertical 60/40", "fichier": "vertical 60-40", "deux_cameras": true,
    "detail": "1080 × 1920 — haut 60 %, bas 40 %",
    "W": 1080, "H": 1920, "fond": "#000000",
+   "dossier": "Vertical", "habillage": {"cap_y": 0.5516, "cap_taille": 0.023, "titre_y": 0.6},
    "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 1152, "source": "camera"},
              "b": {"x": 0, "y": 1152, "w": 1080, "h": 768, "source": "ecran"}}
   },
@@ -80,12 +94,14 @@
    "nom": "Horizontal une caméra", "fichier": "horizontal solo", "deux_cameras": false,
    "detail": "1920 × 1080 — une caméra, sous-titres du côté libre du visage",
    "W": 1920, "H": 1080, "fond": "#000000",
+   "dossier": "Horizontal", "habillage": {"cap_y": 0.5, "cap_taille": 0.042, "titre_y": 0.09, "cote_libre": true},
    "zones": {"a": {"x": 0, "y": 0, "w": 1920, "h": 1080, "source": "camera"}}
   },
   "carre": {
    "nom": "Carré 1:1", "fichier": "carre", "deux_cameras": false,
    "detail": "1080 × 1080 — la vidéo d'origine entre deux bandes noires",
    "W": 1080, "H": 1080, "fond": "#000000",
+   "dossier": "Vertical", "habillage": {"cap_y": 0.88, "cap_taille": 0.042, "titre_y": 0.11, "titre_taille": 0.056, "titre_duree": 0, "titre_deux_lignes": true},
    "zones": {"a": {"x": 0, "y": 236, "w": 1080, "h": 608, "source": "camera"}}
   }
  }

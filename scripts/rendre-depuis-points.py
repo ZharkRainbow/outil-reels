@@ -24,12 +24,6 @@ import formats
 CAM = Path("camera.mp4")   # surcharge par les arguments de la ligne de commande
 SCR = Path("ecran.mp4")    # idem
 SCRIPTS = Path(__file__).parent
-# position des captions et du bandeau titre, par format
-HABILLAGE = {
-    "vmc":   dict(cap_y=0.4513, cap_taille=0.023, titre_y=0.4997),
-    "vcons": dict(cap_y=0.4513, cap_taille=0.023, titre_y=0.4997),
-    "hmc":   dict(cap_y=0.880,  cap_taille=0.032, titre_y=0.792, halo=True),
-}
 
 
 def layout(cle):
@@ -126,10 +120,10 @@ def main():
                        capture_output=True)
         srt = opt.get("--srt")
         if srt and Path(srt).exists():
-            # les formats verticaux ajoutes depuis partagent les reperes du 50/50
-            cle = data.get("format", "vmc")
-            f_ = formats.trouver(cle)
-            hab = HABILLAGE.get(cle, HABILLAGE["hmc" if f_["W"] > f_["H"] else "vmc"])
+            # les reperes de l'habillage viennent de la table, comme la geometrie :
+            # sur un format empile, le titre tombe sur la couture entre les deux
+            # zones, et la couture n'est pas au meme endroit en 50/50 et en 80/20
+            hab = formats.habillage(data.get("format", "vmc"))
             cmd = ["python3", str(SCRIPTS / "incruster-captions.py"), str(brut), srt,
                    str(dst), "--y", str(hab["cap_y"]),
                    "--taille", str(hab["cap_taille"])]
