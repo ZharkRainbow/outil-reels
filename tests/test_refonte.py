@@ -4,6 +4,8 @@
 """
 import importlib
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -17,6 +19,8 @@ RACINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RACINE / 'outil'))
 sys.path.insert(0, str(RACINE / 'scripts'))
 serveur = importlib.import_module('serveur')
+formats = importlib.import_module('formats')
+PAGE = RACINE / 'outil' / 'index.html'
 
 
 class ServeurLocal(unittest.TestCase):
@@ -127,6 +131,150 @@ class ServeurLocal(unittest.TestCase):
         self.assertEqual(self.requete('/enregistrer', 'POST', {}, d)[0], 200)
         self.assertEqual(self.requete('/lots/Podcast/')[0], 404)
         self.assertEqual(json.loads(self.requete('/export-etat?nom=jamais-vu')[2])['ok'], False)
+
+    def lot_long(self, ident):
+        """Un lot dont l'identifiant de reel depasse a lui seul la coupe du nom."""
+        (self.lots / 'Long').mkdir()
+        (self.lots / 'Long' / 'reels.json').write_text(json.dumps(
+            {'lot': 'Long', 'rendu': False,
+             'reels': [{'id': ident, 'camera': 'lots/Long/haut.mp4',
+                        'ecran': 'lots/Long/bas.mp4'}]}))
+
+    def envoyer(self, ident, lot, cle):
+        d = {'reel': ident, 'lot_id': lot, 'format': cle, 'debuts': [0], 'points': []}
+        code, _, contenu = self.requete('/enregistrer', 'POST',
+                                        {'Content-Type': 'application/json'},
+                                        json.dumps(d).encode())
+        # un refus repond en HTML : seul le code compte alors
+        return code, (json.loads(contenu) if code == 200 else {})
+
+    def test_un_fichier_par_format_meme_sur_un_identifiant_long(self):
+        """Le nom de travail est coupe a soixante caracteres. Quand la coupe
+        tombait APRES le format, deux formats d'un reel au nom long rendaient le
+        meme fichier : le second ecrasait le cadrage du premier."""
+        ident = 'Podcast-de-rentree-partie-deux-segment-quinze-prise-trois-bis-B'
+        self.lot_long(ident)
+        noms = {}
+        for cle in formats.ORDRE:
+            code, reponse = self.envoyer(ident, 'Long', cle)
+            self.assertEqual((code, reponse['garde']), (200, True))
+            noms[cle] = reponse['fichier']
+            self.assertLessEqual(len(reponse['fichier']), 65)
+        self.assertEqual(len(set(noms.values())), len(formats.ORDRE))
+        for cle, nom in noms.items():
+            sauve = json.loads((serveur.DEPOT / nom).read_text())
+            self.assertEqual((sauve['reel'], sauve['format']), (ident, cle))
+
+    def test_format_inconnu_refuse(self):
+        self.assertEqual(self.envoyer('P1-03', 'Podcast', 'vertical-maison')[0], 400)
+
+    def test_un_export_fini_survit_au_redemarrage(self):
+        """ETATS vit en memoire. Sans l'issue posee a cote du journal, la colonne
+        de suivi rouvrait un export reussi en « rate » apres un redemarrage."""
+        serveur.DEPOT.mkdir(parents=True, exist_ok=True)
+        for code, attendu in ((0, True), (1, False)):
+            (serveur.DEPOT / 'T.log').write_text('Reel pret : T.mp4')
+            (serveur.DEPOT / 'T.etat').write_text(str(code))
+            reponse = json.loads(self.requete('/export-etat?nom=T')[2])
+            self.assertEqual((reponse['fini'], reponse['ok']), (True, attendu))
+        # un journal sans issue = un rendu coupe en route, et non un succes
+        (serveur.DEPOT / 'T.etat').unlink()
+        self.assertEqual(json.loads(self.requete('/export-etat?nom=T')[2])['ok'], False)
+
+
+class TousLesFormats(unittest.TestCase):
+    """La page propose dix formats : les deux moteurs doivent les tenir tous."""
+
+    def test_table_coherente(self):
+        noms = set()
+        for cle in formats.ORDRE:
+            f = formats.trouver(cle)
+            noms.add(f['fichier'])
+            self.assertIn(formats.dossier(cle), ('Vertical', 'Horizontal'))
+            self.assertIn('cap_y', formats.habillage(cle))
+            for _, z in formats.zones(cle):
+                self.assertLessEqual(z['x'] + z['w'], f['W'])
+                self.assertLessEqual(z['y'] + z['h'], f['H'])
+                self.assertIn(z['source'], ('camera', 'ecran'))
+        # deux formats du meme reel se distinguent par le nom de fichier
+        self.assertEqual(len(noms), len(formats.ORDRE))
+
+    def test_le_rendu_habille_cadre_les_dix_formats(self):
+        """rendre-reel.py gardait sa propre table de quatre formats : le 80/20
+        pose dans la page sortait en « KeyError: v8020 »."""
+        rendre = importlib.import_module('rendre-reel')
+        for cle in formats.ORDRE:
+            zones = dict(formats.zones(cle))
+            cadre = {}
+            for nom, z in zones.items():
+                h, w = 1080, round(1080 * z['w'] / z['h'])
+                if w > 1920:
+                    w, h = 1920, round(1920 * z['h'] / z['w'])
+                cadre[nom] = {'x': 0, 'y': 0, 'w': w, 'h': h}
+            point = {'t': 0, 'camera': cadre['a']}
+            if 'b' in zones:
+                point['ecran'] = cadre['b']
+            d = {'format': cle, 'camera': 'haut.mp4', 'ecran': 'bas.mp4',
+                 'source': {'w': 1920}, 'points': [point]}
+            with patch.object(rendre, 'taille_source', lambda _: (1920, 1080)):
+                pts = rendre.cadrages(d)
+            self.assertEqual(len(pts), 1, cle)
+            self.assertEqual(set(pts[0]) - {'t', 'glisse'}, {'A', 'B'}, cle)
+            if formats.une_camera(cle):
+                # rien a empiler : la zone unique sert les deux places
+                self.assertEqual(pts[0]['A'], pts[0]['B'], cle)
+
+    def test_le_rendu_brut_accepte_les_dix_formats(self):
+        brut = importlib.import_module('produire-split')
+        for cle in formats.ORDRE:
+            d = {'format': cle, 'camera': 'haut.mp4', 'debuts': [0], 'fin': 10,
+                 'points': [{'t': 0, 'camera': {'x': 0, 'y': 0, 'w': 100, 'h': 100}}]}
+            if not formats.une_camera(cle):
+                d['ecran'] = 'bas.mp4'
+            brut.verifier(d)          # ne doit rien lever
+        with self.assertRaises(ValueError):
+            brut.verifier({'format': 'vmc', 'camera': 'haut.mp4',
+                           'debuts': [0], 'fin': 10, 'points': [{}]})
+
+
+class ReglesDeLaPage(unittest.TestCase):
+    """Les trois decisions qui se discutent vivent dans un bloc sans DOM de
+    outil/index.html, justement pour etre rejouables ici."""
+
+    def regles(self):
+        page = PAGE.read_text(encoding='utf-8')
+        debut = page.index('const REGLES={')
+        return page[debut:page.index('\n};', debut) + 3]
+
+    @unittest.skipUnless(shutil.which('node'), 'node absent')
+    def test_regles_rejouees(self):
+        essai = self.regles() + """
+const dit=(ok,quoi)=>{if(!ok){console.error('RATE : '+quoi);process.exit(1)}};
+
+// « Supprimer les blancs » ne doit toucher que les coupes proposees par l'analyse
+let coupes=[{type:'blanc',on:false},{type:'reprise',on:false},{type:'manuel',on:false}];
+coupes.forEach(c=>{if(REGLES.proposee(c))c.on=true});
+dit(coupes[0].on&&coupes[1].on,'le blanc et la reprise partent au rendu');
+dit(!coupes[2].on,'la coupe posee a la main reste posee');
+// « Tout garder » va dans l'autre sens pour tout le monde : il ne retire rien
+coupes.forEach(c=>c.on=false);
+dit(coupes.every(c=>!c.on),'tout garder remet tout');
+
+// l'apercu suit le moteur : un seul cadre en production brute
+dit(REGLES.cadreFige(true)&&!REGLES.cadreFige(false),'cadre fige en brut seulement');
+dit(!REGLES.pointsIgnores(true,1),'un seul point : rien a signaler');
+dit(REGLES.pointsIgnores(true,2),'deux points en brut : il faut le dire');
+dit(!REGLES.pointsIgnores(false,5),'en rendu habille les points servent tous');
+
+// le suivi distingue (reel, format), et deux couples differents ne se confondent pas
+dit(REGLES.cleEnvoi('P1-03','vmc')!==REGLES.cleEnvoi('P1-03','hmc'),'un format, une ligne');
+dit(REGLES.cleEnvoi('P1-03','vmc')===REGLES.cleEnvoi('P1-03','vmc'),'la cle est stable');
+dit(REGLES.cleEnvoi('P1','03-vmc')!==REGLES.cleEnvoi('P1-03','vmc'),'pas de telescopage');
+dit(REGLES.cleEnvoi('P1-03')===REGLES.cleEnvoi('P1-03','vmc'),'sans format : le vertical 50/50');
+console.log('regles de la page : OK');
+"""
+        r = subprocess.run(['node', '-e', essai], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr or r.stdout)
 
 
 class NomsDuRendu(unittest.TestCase):
