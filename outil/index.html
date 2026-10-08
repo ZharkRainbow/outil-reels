@@ -3,55 +3,87 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Outil de reels</title>
 <style>
+/* Mise en forme inspiree de HyperFrames Studio, regarde en local dans Chrome
+   (npm hyperframes, Apache-2.0). Rien n'en est copie : ni code, ni dependance,
+   ni couleur de marque. Ce qu'on lui reprend, ce sont quatre habitudes.
+   1. Trois niveaux de fond seulement, en gris CHAUDS, et pas un de plus.
+   2. Les liserés ne sont pas une couleur : c'est du blanc transparent, donc le
+      meme liseré tient sur les trois niveaux.
+   3. UN seul accent. Ici l'ambre de la forme d'onde. Le vert et le rouge ne
+      disent plus qu'un etat — validé, raté — jamais une decoration.
+   4. Les titres de section sont minuscules et tres espaces ; les nombres sont
+      en chasse fixe et alignes ; les lignes de valeurs n'ont qu'un filet. */
 :root{
- --bleu:#2322E0;--bleu-clair:#4a49ff;--jaune:#FAD400;--vert:#3ddc84;--rouge:#ff5b7a;
- --fond:#141417;--noir:#191919;--gris:#26262b;--gris-clair:#2e2e35;--bord:#3a3a42;
- --texte:#e8e8ea;--doux:#9a9aa2;--tres-doux:#7a7a84;
+ --fond:#1b1a17;--noir:#1b1a17;--gris:#232120;--gris-clair:#2b2825;--gris-haut:#201e1c;
+ --bord:rgba(245,243,241,.085);--bord-fort:rgba(245,243,241,.17);
+ --texte:#f3f1ef;--doux:#b4b1ad;--tres-doux:#918e8a;
+ --ambre:#e9a84b;--ambre-clair:#f4c474;--ambre-sourd:rgba(233,168,75,.15);
+ --encre:#20170a;                       /* le texte pose sur l'ambre */
+ --vert:#5ddc9b;--rouge:#e8656f;--jaune:#e9a84b;
  /* la piste : fond plus sombre que le reste pour que la forme d'onde ressorte */
- --piste:#0d0d0f;--liseré:#1d1d20;--ambre:#e9a84b;--ambre-clair:#f4c474}
+ --piste:#121110;--liseré:rgba(245,243,241,.07)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--fond);color:var(--texte);
- font:13px/1.5 -apple-system,system-ui,sans-serif;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+ font:13px/1.5 -apple-system,system-ui,sans-serif;height:100dvh;display:flex;flex-direction:column;overflow:hidden;
+ -webkit-font-smoothing:antialiased}
+/* l'anneau de mise au point se pose a l'interieur : aucun bouton ne deborde */
+:where(button,select,input,[tabindex]):focus-visible{outline:2px solid var(--ambre);
+ outline-offset:-2px;border-radius:6px}
+/* on n'anime que la couleur, l'opacite et l'echelle, et jamais longtemps */
+button,.seg button,.chip,.coupe i,.mk,#prod li{transition:background-color .1s,color .1s,
+ border-color .1s,opacity .1s,transform .1s}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* ---- Barre du haut ------------------------------------------------- */
-header{display:flex;align-items:center;gap:14px;padding:9px 16px;background:var(--noir);
- border-bottom:1px solid var(--bord)}
-h1{font-size:14px;margin:0;font-weight:600;letter-spacing:.2px}
-.etiquette{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--tres-doux)}
-.champ{display:flex;align-items:center;gap:6px}
-#lotSel{background:var(--bleu);color:#fff;border:0;border-radius:6px;padding:6px 8px;
- font-size:12px;font-weight:600;max-width:220px}
-#passage{background:var(--gris);color:#ddd;border:1px solid var(--bord);border-radius:6px;
- padding:6px 8px;font-size:12px;max-width:320px}
-.seg{display:flex;border:1px solid var(--bord);border-radius:7px;overflow:hidden}
-.seg button{background:var(--gris);color:#aaa;border:0;padding:6px 13px;cursor:pointer;font-size:12px}
-.seg button.on{background:var(--bleu);color:#fff}
+header{display:flex;align-items:center;gap:12px;padding:0 14px;height:46px;flex:none;
+ background:var(--gris-haut);border-bottom:1px solid var(--bord)}
+h1{font-size:13px;margin:0;font-weight:600;letter-spacing:-.1px;white-space:nowrap}
+.etiquette{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;
+ color:var(--tres-doux)}
+.champ{display:flex;align-items:center;gap:7px}
+/* les deux menus sont des champs, pas des boutons : un seul aplat d'accent
+   par ecran, et c'est le bouton de validation qui le prend */
+#lotSel,#passage{height:28px;background:var(--gris);color:var(--texte);
+ border:1px solid var(--bord-fort);border-radius:6px;padding:0 7px;font-size:12px}
+#lotSel{max-width:220px;font-weight:600}
+#passage{max-width:320px}
+.seg{display:flex;border:1px solid var(--bord-fort);border-radius:7px;overflow:hidden;
+ background:var(--gris)}
+.seg button{background:none;color:var(--tres-doux);border:0;border-left:1px solid var(--bord);
+ height:28px;padding:0 11px;cursor:pointer;font-size:11.5px;font-weight:500}
+.seg button:first-child{border-left:0}
+.seg button:hover:not(.on){background:rgba(245,243,241,.055);color:var(--doux)}
+.seg button.on{background:var(--ambre-sourd);color:var(--ambre-clair);font-weight:600}
 .sp{flex:1}
-.val{font:11px ui-monospace,monospace;color:var(--jaune);text-transform:none;letter-spacing:0}
-.val b{color:var(--rouge)}
-.avancement{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--doux)}
-.avancement b{color:var(--vert);font:12px ui-monospace,monospace}
+.val{font:11px ui-monospace,monospace;color:var(--ambre);font-variant-numeric:tabular-nums}
+.val b{color:var(--ambre-clair);font-weight:600}
+.avancement{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--doux)}
+.avancement b{color:var(--vert);font:12px ui-monospace,monospace;font-variant-numeric:tabular-nums}
 
 /* ---- Corps : sources, apercu, panneau de validation ----------------- */
 main{flex:1;min-height:0;display:grid;gap:12px;padding:12px;justify-content:center;
  grid-template-columns:minmax(240px,auto) minmax(150px,auto) 300px}
 .carte{background:var(--gris);border:1px solid var(--bord);border-radius:8px;
  display:flex;flex-direction:column;min-height:0;overflow:hidden}
-.carte>h2{font-size:11px;margin:0;padding:7px 11px;background:#1e1e23;color:var(--doux);
- font-weight:600;text-transform:uppercase;letter-spacing:.6px;
+.carte>h2{font-size:9px;margin:0;padding:0 11px;height:30px;background:var(--gris-haut);
+ color:var(--tres-doux);font-weight:600;text-transform:uppercase;letter-spacing:.12em;
  display:flex;justify-content:space-between;align-items:center;gap:10px;
  border-bottom:1px solid var(--bord);flex:none}
+.carte>h2 .val{letter-spacing:0;text-transform:none}
 .sources{display:grid;grid-template-rows:1fr 1fr;gap:12px;min-height:0}
 .stage{position:relative;line-height:0;overflow:hidden;flex:1;display:flex;
  align-items:center;justify-content:center;background:#000}
 .stage video,.stage canvas{max-width:100%;max-height:100%;display:block}
 .stage canvas{width:100%;height:auto}
 .wrap{position:relative;line-height:0;display:inline-block;width:fit-content}
-.box{position:absolute;border:2px solid var(--jaune);box-shadow:0 0 0 4000px rgba(0,0,0,.6);cursor:move}
-.box.sel{border-color:#4ef}
-.box i{position:absolute;width:16px;height:16px;background:var(--jaune);border-radius:3px;
+/* le cadre au repos est blanc transparent, celui qu'on pilote est ambre :
+   une seule couleur d'accent suffit a dire lequel repond aux fleches */
+.box{position:absolute;border:2px solid rgba(245,243,241,.5);
+ box-shadow:0 0 0 4000px rgba(0,0,0,.6);cursor:move}
+.box.sel{border-color:var(--ambre)}
+.box i{position:absolute;width:14px;height:14px;background:rgba(245,243,241,.75);border-radius:3px;
  border:2px solid var(--fond)}
-.box.sel i{background:#4ef}
+.box.sel i{background:var(--ambre)}
 .box i.nw{left:-8px;top:-8px;cursor:nwse-resize}.box i.ne{right:-8px;top:-8px;cursor:nesw-resize}
 .box i.sw{left:-8px;bottom:-8px;cursor:nesw-resize}.box i.se{right:-8px;bottom:-8px;cursor:nwse-resize}
 
@@ -63,26 +95,36 @@ main{flex:1;min-height:0;display:grid;gap:12px;padding:12px;justify-content:cent
 
 /* ---- Colonne de droite : valider et envoyer en production ----------- */
 aside{display:flex;flex-direction:column;gap:14px;min-height:0;overflow:auto}
-aside h2{font-size:11px;margin:0;color:var(--doux);text-transform:uppercase;letter-spacing:.6px;
- display:flex;align-items:center;gap:7px}
+aside h2{font-size:9px;margin:0;color:var(--tres-doux);text-transform:uppercase;
+ letter-spacing:.12em;font-weight:600;display:flex;align-items:center;gap:7px}
 .bloc{background:var(--gris);border:1px solid var(--bord);border-radius:8px;padding:11px 12px}
-.bloc.principal{border-color:#43436b;background:linear-gradient(#2a2a3a,#24242c)}
-.aide{width:17px;height:17px;flex:none;border-radius:50%;border:1px solid var(--bord);
- background:var(--gris-clair);color:var(--doux);font-size:10px;line-height:1;cursor:help;padding:0}
-table{width:100%;border-collapse:collapse;font:11px ui-monospace,monospace;margin-top:7px}
-td,th{text-align:left;padding:3px 5px;border-bottom:1px solid var(--bord)}
-th{color:#8a8a92}
-tr.on td{background:rgba(78,255,255,.12)}
+.bloc.principal{border-color:var(--bord-fort);background:var(--gris-clair)}
+.aide{width:16px;height:16px;flex:none;border-radius:50%;border:1px solid var(--bord-fort);
+ background:none;color:var(--tres-doux);font-size:10px;line-height:1;cursor:help;padding:0}
+.aide:hover{color:var(--texte);border-color:var(--doux)}
+/* les lignes de valeurs n'ont qu'un filet sous elles : ni boite, ni fond */
+table{width:100%;border-collapse:collapse;font:11px ui-monospace,monospace;margin-top:7px;
+ font-variant-numeric:tabular-nums}
+td,th{text-align:left;padding:4px 5px;border-bottom:1px solid var(--bord)}
+th{font:9px -apple-system,system-ui,sans-serif;font-weight:600;text-transform:uppercase;
+ letter-spacing:.12em;color:var(--tres-doux)}
+tr.on td{background:var(--ambre-sourd);color:var(--ambre-clair)}
 tr[data-i]{cursor:pointer}
-td button{background:none;border:0;color:var(--rouge);cursor:pointer;font-size:14px}
+tr[data-i]:hover td{background:rgba(245,243,241,.055)}
+td button{background:none;border:0;color:var(--tres-doux);cursor:pointer;font-size:14px}
+td button:hover{color:var(--rouge)}
 .vide{color:var(--tres-doux);font-size:11px;font-style:italic;margin:8px 0 0}
-#recapListe{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:9px 0 0;font-size:11.5px}
-#recapListe dt{color:var(--tres-doux)}
-#recapListe dd{margin:0;font:11.5px ui-monospace,monospace;color:var(--texte);text-align:right}
-#recapListe dd.fort{color:var(--jaune)}
-#envoyer{width:100%;padding:11px 14px;font-size:13px}
-#etat{display:flex;gap:8px;align-items:flex-start;margin:10px 0 0;padding:8px 9px;
- border-radius:6px;background:#1b1b20;border:1px solid var(--bord);
+#recapListe{display:grid;grid-template-columns:auto 1fr;gap:0 12px;margin:7px 0 0;font-size:11.5px}
+#recapListe dt{color:var(--tres-doux);padding:5px 0;border-bottom:1px solid var(--bord)}
+#recapListe dd{margin:0;padding:5px 0;border-bottom:1px solid var(--bord);
+ font:11.5px ui-monospace,monospace;font-variant-numeric:tabular-nums;
+ color:var(--texte);text-align:right;overflow-wrap:anywhere}
+#recapListe dd.fort{color:var(--ambre)}
+#recapListe dt:last-of-type,#recapListe dd:last-of-type{border-bottom:0}
+/* le seul aplat d'accent de la page */
+#envoyer{width:100%;height:36px;padding:0 14px;font-size:12.5px}
+#etat{display:flex;gap:8px;align-items:flex-start;margin:10px 0 0;padding:7px 9px;
+ border-radius:6px;background:rgba(0,0,0,.22);border:1px solid var(--bord);
  font-size:11.5px;line-height:1.45;color:var(--doux);word-break:break-word}
 #etat::before{content:'';flex:none;width:8px;height:8px;margin-top:4px;border-radius:50%;
  background:var(--bord)}
@@ -90,8 +132,8 @@ td button{background:none;border:0;color:var(--rouge);cursor:pointer;font-size:1
 #etat.cours::before{background:var(--jaune);animation:bat 1.1s ease-in-out infinite}
 #etat.pret::before{background:var(--vert)}
 #etat.rate::before{background:var(--rouge)}
-#etat.pret{color:#cfe9d8}
-#etat.rate{color:#ffc3cf}
+#etat.pret{color:#bfe6d2}
+#etat.rate{color:#f3bcc1}
 @keyframes bat{50%{opacity:.25}}
 /* Suivi de production : une ligne par reel envoye. Un seul paragraphe ne
    suffisait plus — des qu'on passait au reel suivant, le rendu en cours
@@ -107,27 +149,28 @@ td button{background:none;border:0;color:var(--rouge);cursor:pointer;font-size:1
 #prod li.rate::before{background:var(--rouge)}
 #prod li>div{min-width:0}
 #prod b{display:block;color:var(--texte);font-weight:600}
-#prod li.pret b{color:#cfe9d8}
-#prod li.rate b{color:#ffc3cf}
-.secondaire{background:none;border:0;color:var(--doux);text-decoration:underline;cursor:pointer;
+#prod li.pret b{color:#bfe6d2}
+#prod li.rate b{color:#f3bcc1}
+.secondaire{background:none;border:0;color:var(--tres-doux);text-decoration:underline;cursor:pointer;
  font-size:11.5px;padding:0;align-self:flex-start}
-.hint{color:#8a8a92;font-size:11px;line-height:1.5;margin:8px 0 0}
+.secondaire:hover{color:var(--texte)}
+.hint{color:var(--tres-doux);font-size:11px;line-height:1.5;margin:8px 0 0}
 textarea{display:none}
 
 /* ---- La piste : forme d'onde, curseur attrapable, mots et coupes ----- */
-.piste{background:var(--noir);border-top:1px solid var(--bord);padding:8px 16px 11px;flex:none}
+.piste{background:var(--gris-haut);border-top:1px solid var(--bord);padding:8px 14px 11px;flex:none}
 
 /* barre de transport au-dessus de la piste */
 .transport{display:flex;align-items:center;gap:12px;margin-bottom:9px;min-height:38px}
 .lecture{width:38px;height:38px;flex:none;border:0;border-radius:50%;cursor:pointer;padding:0;
- background:linear-gradient(180deg,var(--ambre-clair),var(--ambre));color:#1a130a;
- box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 16px -6px rgba(233,168,75,.7);
- display:flex;align-items:center;justify-content:center;transition:transform .12s}
-.lecture:hover{transform:scale(1.06)}
+ background:linear-gradient(180deg,var(--ambre-clair),var(--ambre));color:var(--encre);
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.3);
+ display:flex;align-items:center;justify-content:center}
+.lecture:hover{transform:scale(1.05);background:var(--ambre-clair)}
 .lecture svg{width:14px;height:15px;fill:currentColor;pointer-events:none}
 .horloge{font:12px ui-monospace,Menlo,monospace;min-width:108px;
  font-variant-numeric:tabular-nums;white-space:nowrap}
-.horloge b{color:var(--jaune);font-weight:600}
+.horloge b{color:var(--ambre);font-weight:600}
 .horloge span{color:var(--tres-doux)}
 .indice{font-size:11.5px;color:var(--tres-doux);display:flex;align-items:center;gap:6px;
  flex-wrap:wrap}
@@ -142,9 +185,10 @@ textarea{display:none}
 #onde{position:absolute;left:0;top:15px;width:100%;height:calc(100% - 42px);
  border-radius:4px;display:block}
 /* la regle de temps : sans elle, une piste zoomee ne dit plus ou l'on est */
-.grad{position:absolute;top:0;height:15px;width:1px;background:#2a2a30;pointer-events:none}
-.grad span{position:absolute;top:1px;left:4px;font:9.5px ui-monospace,monospace;color:#5c5c66;
- font-variant-numeric:tabular-nums}
+.grad{position:absolute;top:0;height:15px;width:1px;background:rgba(245,243,241,.13);
+ pointer-events:none}
+.grad span{position:absolute;top:1px;left:4px;font:9.5px ui-monospace,monospace;
+ color:var(--tres-doux);font-variant-numeric:tabular-nums}
 /* hors du reel : hachure sombre, pour voir d'un coup ce qui ne sortira pas */
 .voile{position:absolute;top:0;bottom:0;pointer-events:none;z-index:2;
  background:repeating-linear-gradient(135deg,rgba(9,9,10,.74) 0 6px,rgba(9,9,10,.86) 6px 12px)}
@@ -163,15 +207,17 @@ textarea{display:none}
 .coupe.off i{display:none}
 /* les mots transcrits, sur la meme piste */
 .mot{position:absolute;bottom:5px;font:10px/14px -apple-system,system-ui,sans-serif;
- color:#c8c8d0;white-space:nowrap;pointer-events:none;border-left:1px solid #43434d;
- padding-left:3px;z-index:4}
+ color:var(--doux);white-space:nowrap;pointer-events:none;
+ border-left:1px solid rgba(245,243,241,.18);padding-left:3px;z-index:4}
 /* les cadrages poses */
-.mk{position:absolute;top:15px;bottom:27px;width:3px;background:var(--jaune);cursor:pointer;z-index:5}
-.mk:hover,.mk.on{background:#4ef;width:5px;margin-left:-1px}
-.mk span{position:absolute;top:1px;left:5px;font:10px ui-monospace,monospace;color:var(--jaune);
+.mk{position:absolute;top:15px;bottom:27px;width:2px;background:rgba(245,243,241,.6);
+ cursor:pointer;z-index:5}
+.mk:hover,.mk.on{background:var(--ambre-clair);width:4px;margin-left:-1px}
+.mk span{position:absolute;top:1px;left:5px;font:10px ui-monospace,monospace;color:var(--doux);
  white-space:nowrap;pointer-events:none}
-.zone{position:absolute;top:15px;bottom:27px;background:rgba(117,167,255,.20);
- border-left:2px solid #75a7ff;pointer-events:none;z-index:4}
+.mk:hover span,.mk.on span{color:var(--ambre-clair)}
+.zone{position:absolute;top:15px;bottom:27px;background:rgba(233,168,75,.13);
+ border-left:2px solid rgba(233,168,75,.55);pointer-events:none;z-index:4}
 /* departs et fin : des poignees en capsule, comme les bornes de l'Atelier */
 .poignee{position:absolute;top:-2px;bottom:-2px;width:14px;z-index:7;cursor:ew-resize;
  display:flex;align-items:center;justify-content:center;border-radius:6px 0 0 6px}
@@ -199,9 +245,11 @@ textarea{display:none}
 
 .debuts{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 7px 9px;min-height:24px;
  font-size:11px;color:var(--doux)}
-.chip{display:flex;align-items:center;gap:5px;background:#1d2922;border:1px solid #2f5b3c;
- border-radius:12px;padding:1px 4px 1px 9px;color:#cfe;font:11px ui-monospace,monospace}
-.chip i{color:#8fb;font-style:normal}
+.chip{display:flex;align-items:center;gap:5px;background:rgba(93,220,155,.1);
+ border:1px solid rgba(93,220,155,.3);border-radius:12px;padding:1px 4px 1px 9px;
+ color:#bfe6d2;font:11px ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.chip:hover{background:rgba(93,220,155,.17)}
+.chip i{color:var(--vert);font-style:normal}
 .chip button{background:none;border:0;color:var(--vert);cursor:pointer;font-size:12px;padding:0 3px}
 .chip button.x{color:var(--rouge)}
 
@@ -209,24 +257,33 @@ textarea{display:none}
 .groupe{display:flex;flex-direction:column;gap:6px;padding:0 14px;
  border-right:1px solid var(--bord);justify-content:flex-end}
 .groupe:first-child{padding-left:0}
-.groupe>span:first-child{display:flex;align-items:center;gap:5px;font-size:10px;
- text-transform:uppercase;letter-spacing:.6px;color:var(--tres-doux);white-space:nowrap}
+.groupe>span:first-child{display:flex;align-items:center;gap:5px;font-size:9px;font-weight:600;
+ text-transform:uppercase;letter-spacing:.12em;color:var(--tres-doux);white-space:nowrap}
 .groupe .boutons{display:flex;align-items:center;gap:6px}
 .navigation{margin-left:auto;border-right:0;padding-right:0;align-items:flex-end}
-kbd{display:inline-block;min-width:16px;padding:1px 4px;border-radius:4px;background:#303038;
- border:1px solid #4a4a54;border-bottom-width:2px;color:#cfcfd6;
+kbd{display:inline-block;min-width:16px;padding:1px 4px;border-radius:4px;
+ background:rgba(245,243,241,.09);border:1px solid var(--bord-fort);color:var(--doux);
  font:10px/1.3 ui-monospace,monospace;text-align:center;text-transform:none;letter-spacing:0}
-button.act{background:var(--bleu);color:#fff;border:0;padding:7px 11px;border-radius:6px;
- cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap}
-button.act:hover:not(:disabled){filter:brightness(1.15)}
-button.act.g{background:#34343c}
-button.act.v{background:#1f7a45}
-button.act:disabled{opacity:.35;cursor:default}
-button.fantome{background:transparent;border:1px solid var(--bord);color:var(--doux)}
-button.fantome:hover{background:var(--gris-clair);color:var(--texte)}
-button.suite{padding:9px 16px;font-size:13px;background:var(--bleu);
- box-shadow:0 0 0 1px var(--bleu-clair),0 2px 10px rgba(35,34,224,.45)}
-.chk{display:flex;gap:5px;align-items:center;font-size:12px;color:#bbb;cursor:pointer;white-space:nowrap}
+/* Une seule hauteur de commande dans toute la page : 28 px. Le bouton plein
+   est reserve a l'action principale ; tout le reste est discret. */
+button.act{height:28px;background:var(--ambre);color:var(--encre);border:1px solid transparent;
+ padding:0 11px;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap}
+button.act:hover:not(:disabled){background:var(--ambre-clair)}
+/* l'accent sourd : l'action principale d'une barre de commandes, sans voler
+   son aplat plein au bouton de validation */
+button.act.a{background:var(--ambre-sourd);color:var(--ambre-clair);
+ border-color:rgba(233,168,75,.42)}
+button.act.a:hover:not(:disabled){background:rgba(233,168,75,.26);color:var(--texte)}
+button.act.g{background:rgba(245,243,241,.07);color:var(--doux);border-color:var(--bord-fort)}
+button.act.g:hover:not(:disabled){background:rgba(245,243,241,.12);color:var(--texte)}
+button.act.v{background:rgba(93,220,155,.14);color:#bfe6d2;border-color:rgba(93,220,155,.35)}
+button.act.v:hover:not(:disabled){background:rgba(93,220,155,.22);color:#d6f2e3}
+button.act:disabled{opacity:.33;cursor:default}
+button.fantome{background:transparent;border:1px solid var(--bord-fort);color:var(--tres-doux)}
+button.fantome:hover:not(:disabled){background:rgba(245,243,241,.07);color:var(--texte)}
+.chk{display:flex;gap:5px;align-items:center;font-size:11.5px;color:var(--doux);cursor:pointer;
+ white-space:nowrap}
+.chk input{accent-color:var(--ambre)}
 
 /* ---- Variantes de lot ----------------------------------------------- */
 /* lot a une camera : pas de panneau du bas. Quels formats sont proposes se
@@ -240,7 +297,8 @@ body.reels .reel-seul[hidden]{display:none}
 
 @media(max-width:1150px){
  main{grid-template-columns:minmax(200px,auto) minmax(120px,auto) 250px}
- header{gap:9px;flex-wrap:wrap}
+ /* la barre du haut passe a la ligne : sa hauteur fixe doit lacher */
+ header{gap:9px;flex-wrap:wrap;height:auto;min-height:46px;padding:5px 14px}
  .groupe{padding:0 9px}
 }
 @media(max-width:820px){
@@ -355,7 +413,7 @@ body.reels .reel-seul[hidden]{display:none}
     <div class="groupe" aria-label="Cadrage">
       <span>Cadrage <kbd>Alt</kbd> + flèches</span>
       <div class="boutons">
-        <button class="act" id="ajouter">Poser un cadrage ici</button>
+        <button class="act a" id="ajouter">Poser un cadrage ici</button>
         <button class="act g" id="maj" disabled>Corriger ce point</button>
         <button class="act g" id="prec" title="Point de cadrage précédent">‹ point</button>
         <button class="act g" id="suiv" title="Point de cadrage suivant">point ›</button>
