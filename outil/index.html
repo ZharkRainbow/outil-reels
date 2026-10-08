@@ -213,12 +213,8 @@ button.suite{padding:9px 16px;font-size:13px;background:var(--bleu);
 .chk{display:flex;gap:5px;align-items:center;font-size:12px;color:#bbb;cursor:pointer;white-space:nowrap}
 
 /* ---- Variantes de lot ----------------------------------------------- */
-/* lot a une camera : pas de panneau du bas, formats horizontal et carre */
-#fmt button[data-f=hsolo],#fmt button[data-f=carre]{display:none}
-body.solo #fmt button{display:none}
-/* formats a deux cameras : caches tant que le manifeste du lot ne les demande pas */
-#fmt button[data-mc]{display:none}
-body.solo #fmt button[data-f=hsolo],body.solo #fmt button[data-f=carre]{display:block}
+/* lot a une camera : pas de panneau du bas. Quels formats sont proposes se
+   decide en JS a partir de la table partagee, plus en feuille de style. */
 body.solo .sources{grid-template-rows:1fr}
 body.solo .sources .src:nth-child(2){display:none}
 .reel-seul{display:none}
@@ -244,17 +240,8 @@ body.reels .reel-seul{display:flex}
   <h1>Outil de reels</h1>
   <label class="champ"><span class="etiquette">Lot</span>
     <select id="lotSel" title="Changer de lot"></select></label>
-  <div class="seg" id="fmt">
-    <button data-f="vmc" class="on">Vertical 50/50</button>
-    <button data-f="hmc">Horizontal</button>
-    <button data-f="vcons">Vertical consulting</button>
-    <button data-f="hsolo">Horizontal</button>
-    <button data-f="carre">Carré 1:1</button>
-    <button data-f="v7030" data-mc>Vertical 70/30</button>
-    <button data-f="v6535" data-mc>Vertical 65/35</button>
-    <button data-f="v6040" data-mc>Vertical 60/40</button>
-    <button data-f="h5050" data-mc>Horizontal 50/50</button>
-  </div>
+  <!-- rempli par construireFormats() depuis /formats.json -->
+  <div class="seg" id="fmt"></div>
   <label class="champ"><span class="etiquette">Reel</span>
     <select id="passage"><option value="">Toute la prise</option></select></label>
   <span class="val" id="infoFmt"></span>
@@ -363,17 +350,10 @@ body.reels .reel-seul{display:flex}
 <script>
 const SRC_W=3840,SRC_H=2160;
 let DUREE=0;            // vraie duree lue dans le manifeste du lot
-const FORMATS={
- vmc:{nom:"1080 × 1920 — 50/50",W:1080,H:1920,a:{x:0,y:0,w:1080,h:960},b:{x:0,y:960,w:1080,h:960},fond:"#D4CCBE"},
- hmc:{nom:"1920 × 1080 — caméra 720 à gauche",W:1920,H:1080,a:{x:0,y:0,w:720,h:1080},b:{x:720,y:0,w:1200,h:1080},fond:"#000"},
- vcons:{nom:"1080 × 1920 — deux étages, même rush",W:1080,H:1920,a:{x:0,y:0,w:1080,h:960},b:{x:0,y:960,w:1080,h:960},fond:"#000"},
- hsolo:{nom:"1920 × 1080 — une caméra, sous-titres à côté du visage",W:1920,H:1080,a:{x:0,y:0,w:1920,h:1080},b:null,fond:"#000"},
- carre:{nom:"1080 × 1080 — vidéo d'origine au centre, bandes noires",W:1080,H:1080,a:{x:0,y:236,w:1080,h:608},b:null,fond:"#000"},
- // une camera suivie automatiquement en haut, le public en bas (proportions a comparer)
- v7030:{nom:"1080 × 1920 — haut 70 %, bas 30 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1344},b:{x:0,y:1344,w:1080,h:576},fond:"#000"},
- v6535:{nom:"1080 × 1920 — haut 65 %, bas 35 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1248},b:{x:0,y:1248,w:1080,h:672},fond:"#000"},
- v6040:{nom:"1080 × 1920 — haut 60 %, bas 40 %",W:1080,H:1920,a:{x:0,y:0,w:1080,h:1152},b:{x:0,y:1152,w:1080,h:768},fond:"#000"},
- h5050:{nom:"1920 × 1080 — gauche 50 %, droite 50 %",W:1920,H:1080,a:{x:0,y:0,w:960,h:1080},b:{x:960,y:0,w:960,h:1080},fond:"#000"}};
+// La geometrie des formats vit dans scripts/formats.json, servi tel quel sur
+// /formats.json. La page et les deux moteurs de rendu lisent la meme table :
+// un cadre pose ici tombe exactement la ou le rendu le met.
+let FORMATS={}, ORDRE_FMT=[];
 let fmt="vmc", points=[], sel=-1, actif='B', joue=false;
 // Sous-selections a cadrer separement dans une longue prise. Le manifeste du
 // lot peut en fournir via son champ "passages" : [[titre, debut, fin], ...].
@@ -388,7 +368,8 @@ const DEMI=640, ECH=SRC_W/DEMI;   // 3840 / 640 = 6
 const vA=vid, vB=vid, son=vid;
 const crop={A:{x:400,y:120,w:2200,h:1956},B:{x:800,y:120,w:2200,h:1956}};
 function vId(i){return document.getElementById(i)}
-function ratio(k){const f=FORMATS[fmt],z=k==='A'?f.a:(f.b||f.a);return z.w/z.h}
+function ratio(k){const f=FORMATS[fmt];if(!f)return 9/16;   // table pas encore arrivee
+ const z=k==='A'?f.zones.a:(f.zones.b||f.zones.a);return z.w/z.h}
 function clamp(k){const c=crop[k],r=ratio(k);
  c.h=Math.round(c.w/r);
  if(c.h>SRC_H){c.h=SRC_H;c.w=Math.round(c.h*r)}
@@ -418,14 +399,18 @@ function cadrageA(t){
  return p[0]}
 function apercu(){
  const f=FORMATS[fmt];
+ if(!f){return requestAnimationFrame(apercu)}
  if(cvs.width!==f.W||cvs.height!==f.H){cvs.width=f.W;cvs.height=f.H}
  ctx.fillStyle=f.fond;ctx.fillRect(0,0,f.W,f.H);
  let c = (joue && points.length) ? cadrageA(vid.currentTime)||{A:crop.A,B:crop.B} : {A:crop.A,B:crop.B};
  const s=suiviA(vid.currentTime);if(s)c={...c,A:s};
- const decB = (fmt==='vcons') ? 0 : DEMI;   // consulting : les deux cadres dans le meme rush
+ // le proxy porte les deux rushes cote a cote : la zone du bas se lit dans le
+ // rush du haut quand la table dit que sa source est la camera (consulting)
+ const za=f.zones.a,zb=f.zones.b;
+ const decB=(zb&&zb.source==='camera')?0:DEMI;
  try{
-  ctx.drawImage(vid,c.A.x/ECH,c.A.y/ECH,c.A.w/ECH,c.A.h/ECH,f.a.x,f.a.y,f.a.w,f.a.h);
-  if(f.b)ctx.drawImage(vid,decB+c.B.x/ECH,c.B.y/ECH,c.B.w/ECH,c.B.h/ECH,f.b.x,f.b.y,f.b.w,f.b.h);
+  ctx.drawImage(vid,c.A.x/ECH,c.A.y/ECH,c.A.w/ECH,c.A.h/ECH,za.x,za.y,za.w,za.h);
+  if(zb)ctx.drawImage(vid,decB+c.B.x/ECH,c.B.y/ECH,c.B.w/ECH,c.B.h/ECH,zb.x,zb.y,zb.w,zb.h);
  }catch(err){}
  requestAnimationFrame(apercu)}
 // glisser, molette, clavier
@@ -733,12 +718,17 @@ function table(){
   b.onclick=e=>{e.stopPropagation();points.splice(i,1);sel=-1;vId('maj').disabled=true;table();rail();sortie()};
   tr.lastChild.appendChild(b);tb.appendChild(tr)});
  sortie()}
-const NOM_FORMAT={vmc:'vertical',hmc:'horizontal',vcons:'consulting',hsolo:'horizontal',carre:'carre',
- v7030:'vertical 70-30',v6535:'vertical 65-35',v6040:'vertical 60-40',h5050:'horizontal 50-50'};
-function nomPassage(){if(reel)return reel.nom+' - '+NOM_FORMAT[fmt];const s=vId('passage');return s.value===''?'':PASSAGES[+s.value][0]}
-// un cadrage appartient au format dont il a les proportions : vertical et
-// horizontal d'un meme reel gardent chacun leurs cadres sans se melanger
-function duFormat(p){return Math.abs(p.A.w/p.A.h-ratio('A'))<0.03&&(!FORMATS[fmt].b||Math.abs(p.B.w/p.B.h-ratio('B'))<0.03)}
+function nomPassage(){if(reel)return reel.nom+' - '+(FORMATS[fmt]||{}).fichier;
+ const s=vId('passage');return s.value===''?'':PASSAGES[+s.value][0]}
+// Un cadrage appartient au format sous lequel il a ete pose : le 50/50 et le
+// 80/20 d'un meme reel gardent chacun les leurs. Les etats enregistres avant
+// cette version n'ont pas la cle : on retombe alors sur les proportions, qui
+// suffisaient tant que deux formats n'avaient pas le meme rapport.
+function duFormat(p){
+ if(p.fmt)return p.fmt===fmt;
+ const f=FORMATS[fmt];if(!f)return false;
+ return Math.abs(p.A.w/p.A.h-ratio('A'))<0.03
+  &&(!f.zones.b||Math.abs(p.B.w/p.B.h-ratio('B'))<0.03)}
 function dansPassage(p){return p.t>=borneA-0.01&&p.t<=borneB+0.01&&(!reel||duFormat(p))}
 function sortie(){
  const d={format:fmt,passage:nomPassage(),source:{w:SRC_W,h:SRC_H},
@@ -752,7 +742,7 @@ function sortie(){
  if(reel&&reel.base!=null)Object.assign(d,{base:reel.base,public:reel.public});
  vId('sortie').value=JSON.stringify(d);
  garder()}
-vId('ajouter').onclick=()=>{points.push({t:vid.currentTime,A:{...crop.A},B:{...crop.B}});
+vId('ajouter').onclick=()=>{points.push({t:vid.currentTime,fmt,A:{...crop.A},B:{...crop.B}});
  sel=points.length-1;vId('maj').disabled=false;table();rail()};
 vId('maj').onclick=()=>{if(sel<0)return;points[sel].A={...crop.A};points[sel].B={...crop.B};table();rail()};
 vId('prec').onclick=()=>{const T=vid.currentTime;const p=[...points].sort((a,b)=>a.t-b.t).filter(x=>x.t<T-.2);
@@ -778,24 +768,51 @@ vId('envoyer').onclick=()=>envoyerProduction('/enregistrer');
 vId('copier').onclick=async()=>{try{await navigator.clipboard.writeText(vId('sortie').value);
  vId('etat').textContent='JSON copié'}catch(err){vId('etat').textContent='Copie impossible : '+err.message}};
 vId('charger').onclick=()=>{const j=prompt('Colle le JSON');if(!j)return;
- try{const d=JSON.parse(j);points=d.points.map(p=>({t:p.t,glisse:!!p.glisse,A:p.camera,B:p.ecran}));
-  if(d.format)document.querySelector(`#fmt button[data-f="${d.format}"]`).click();
+ try{const d=JSON.parse(j);
+  points=d.points.map(p=>({t:p.t,fmt:d.format||'vmc',glisse:!!p.glisse,A:p.camera,B:p.ecran}));
+  if(d.format)choisirFormat(d.format);
   sel=-1;table();rail()}catch(e){alert('JSON invalide')}};
 // une camera : le plan entier, en horizontal comme en vertical
 function cadreDefaut(){return {x:0,y:0,w:SRC_W,h:SRC_H}}
-function choisirFormat(f){const b=document.querySelector(`#fmt button[data-f="${f}"]`);if(b)b.click()}
-vId('fmt').addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')return;
- [...e.currentTarget.children].forEach(b=>b.classList.remove('on'));e.target.classList.add('on');
- if(reel&&LOT.cadres)vus[fmt]={...crop.B};
- fmt=e.target.dataset.f;nommerFormat();
- // chaque format garde son propre cadre du bas, propose puis ajuste
- if(reel&&LOT.cadres){const p=points.filter(dansPassage);crop.B=p.length?{...p[0].B}:{...(vus[fmt]||LOT.cadres[fmt]||crop.B)}}
- if(reel&&!reel.ecran){const p=points.filter(dansPassage);crop.A=p.length?{...p[0].A}:cadreDefaut()}
+// Changer de format ne deplace pas les cadres de celui qu'on quitte : on les
+// remise dans vus, et on reprend ceux du format demande. Dans l'ordre : un
+// point deja pose sous ce format, le dernier cadre qu'on y avait vu, les cadres
+// par defaut du lot, et a defaut ce qui est a l'ecran.
+function choisirFormat(f){
+ if(!FORMATS[f])return;
+ vus[fmt]={A:{...crop.A},B:{...crop.B}};
+ fmt=f;
+ [...vId('fmt').children].forEach(b=>b.classList.toggle('on',b.dataset.f===f));
+ nommerFormat();
+ if(reel){
+  const p=points.filter(dansPassage),v=vus[fmt]||{},def=LOT.cadres||{};
+  crop.A={...(p.length?p[0].A:(v.A||def[fmt+'_haut']||crop.A))};
+  crop.B={...(p.length?p[0].B:(v.B||def[fmt]||crop.B))};
+  if(!reel.ecran&&!p.length)crop.A=cadreDefaut();
+ }
  boites();dimensionnerPanneaux();
- if(reel){sel=-1;vId('maj').disabled=true;table();rail()}});
-function nommerFormat(){const b=document.querySelector(`#fmt button[data-f="${fmt}"]`);
- const e=vId('infoFmt');e.textContent=b?b.textContent:fmt;e.title=FORMATS[fmt].nom}
-nommerFormat();
+ if(reel){sel=-1;vId('maj').disabled=true;table();rail()}}
+vId('fmt').addEventListener('click',e=>{
+ if(e.target.tagName==='BUTTON')choisirFormat(e.target.dataset.f)});
+function nommerFormat(){const f=FORMATS[fmt],e=vId('infoFmt');
+ e.textContent=f?f.nom:fmt;e.title=f?f.detail:''}
+// un bouton par format connu, dans l'ordre de la table
+function construireFormats(){
+ const seg=vId('fmt');seg.textContent='';
+ for(const c of ORDRE_FMT){const f=FORMATS[c];if(!f)continue;
+  const b=document.createElement('button');
+  b.dataset.f=c;b.textContent=f.nom;b.title=f.detail||'';seg.appendChild(b)}}
+// Par defaut tous les formats a deux cameras sur un lot a deux cameras, les
+// formats a une camera sinon. Le manifeste du lot peut restreindre la liste
+// avec sa cle "formats".
+function montrerFormats(liste){
+ const solo=document.body.classList.contains('solo');
+ const ok=(liste||[]).filter(c=>FORMATS[c]);
+ const propose=ok.length?ok:ORDRE_FMT.filter(c=>!!FORMATS[c].deux_cameras!==solo);
+ [...vId('fmt').children].forEach(b=>b.hidden=!propose.includes(b.dataset.f));
+ vId('fmt').style.display=propose.length<2?'none':'';
+ choisirFormat(propose.includes(fmt)?fmt:propose[0]);   // marque le bouton
+ return propose}
 const selP=vId('passage');
 PASSAGES.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent=p[0];selP.appendChild(o)});
 function changerReel(pas){if(chargement)return;const i=selP.selectedIndex+pas;if(i<0||i>=selP.options.length)return;selP.selectedIndex=i;selP.onchange()}
@@ -832,7 +849,8 @@ function dimensionnerPanneaux(){
  const h=document.querySelector('.src .stage').clientHeight;
  if(h>0)document.querySelector('.sources').style.width=
   Math.round(Math.min(h*16/9,innerWidth*0.5))+'px';
- const f=FORMATS[fmt],carte=document.querySelector('.preview');
+ const f=FORMATS[fmt];if(!f)return;
+ const carte=document.querySelector('.preview');
  const ha=carte.querySelector('.stage').clientHeight;
  if(ha>0)carte.style.width=Math.round(Math.min(ha*f.W/f.H,innerWidth*0.42))+'px';
  vId('infoApercu').textContent=`${f.W} × ${f.H}`;
@@ -866,7 +884,7 @@ function suiviA(t){
  if(t<=suivi[0][0])cx=suivi[0][1];
  else for(let i=0;i<suivi.length-1;i++){if(t<suivi[i+1][0]){
   const f=(t-suivi[i][0])/(suivi[i+1][0]-suivi[i][0]);cx=suivi[i][1]+(suivi[i+1][1]-suivi[i][1])*f;break}}
- const z=FORMATS[fmt].a;let h=SRC_H,w=Math.round(h*z.w/z.h);if(w>SRC_W){w=SRC_W;h=Math.round(w*z.h/z.w)}
+ const z=(FORMATS[fmt]||{zones:{a:{w:9,h:16}}}).zones.a;let h=SRC_H,w=Math.round(h*z.w/z.h);if(w>SRC_W){w=SRC_W;h=Math.round(w*z.h/z.w)}
  return {x:Math.max(0,Math.min(SRC_W-w,Math.round(cx-w/2))),y:0,w,h}}
 let validations={};
 try{validations=JSON.parse(localStorage.getItem(CLE+'-validations')||'{}')}catch(e){}
@@ -878,7 +896,7 @@ try{etats=JSON.parse(localStorage.getItem(CLE)||'{}')}catch(e){etats={}}
 // sans point pose, le cadre affiche vaut cadrage pour toute la video : c'est ce
 // que l'on voit a l'ecran, l'envoyer vide obligeait a deviner le cadrage
 function poserCadreSiVide(){
- if(!points.filter(dansPassage).length){points.push({t:0,A:{...crop.A},B:{...crop.B}});table();rail()}
+ if(!points.filter(dansPassage).length){points.push({t:0,fmt,A:{...crop.A},B:{...crop.B}});table();rail()}
  sortie()}
 function hms(t){const m=Math.floor(t/60);return m+':'+(t-60*m).toFixed(1).padStart(4,'0')}
 function garder(){
@@ -910,7 +928,8 @@ async function chargerReel(id){
  const e=etats[reel.id]||{};
  crop.A={x:400,y:120,w:2200,h:1956};crop.B={x:800,y:120,w:2200,h:1956};
  mots=d.mots||[];blancs=d.blancs||[];visage=d.visage||null;suivi=LOT.suivi?d.suivi||null:null;vus={};
- if(!reel.ecran&&FORMATS[fmt].b)choisirFormat('hsolo');
+ // reel sans second rush : seuls les formats a une camera ont un sens
+ if(!reel.ecran)montrerFormats(ORDRE_FMT.filter(c=>!FORMATS[c].deux_cameras));
  const gardees=new Set(e.coupesGardees||[]);
  coupes=(d.coupes||[]).map(c=>({...c,on:(c.on!==false)&&!gardees.has(c.a.toFixed(2))}))
   .concat((e.manuelles||[]).map(c=>({...c})));
@@ -996,21 +1015,24 @@ function suivre(nom,bouton){
   const j=await fetch('/export-etat?nom='+encodeURIComponent(nom)).then(r=>r.json());
   poserEtat(j.texte,!j.fini?(/file d/.test(j.texte)?'attente':'cours'):(j.ok?'pret':'rate'));
   if(j.fini){clearInterval(suivre.t);rendre()}}catch(err){}},1500)}
+function chargerLot(){
 fetch('/lots/'+encodeURIComponent(LOTP)+'/reels.json?'+Date.now()).then(r=>r.ok?r.json():null).then(j=>{
  if(!j||!j.reels||!j.reels.length)throw new Error('Lot absent ou vide');
  const base=new URL('/lots/'+encodeURIComponent(LOTP)+'/',location.href);
  const resoudre=p=>new URL(LOTP==='reels'?p.replace(/^reels\//,''):p,base).href;
  REELS=j.reels.map(r=>({...r,proxy:resoudre(r.proxy),donnees:resoudre(r.donnees)}));LOT={lot:j.lot,sortie:j.sortie,rendu:j.rendu,suivi:j.suivi===true,cadres:j.cadres||null};document.body.classList.add('reels');selP.textContent='';
  if(vId('lotSel').selectedOptions[0])vId('lotSel').selectedOptions[0].textContent=j.lot||LOTP;
- if(j.formats){
-  vId('fmt').style.display=j.formats.length===1?'none':'';
-  [...vId('fmt').children].forEach(b=>b.style.display=j.formats.includes(b.dataset.f)?'block':'none');
-  // libelles du mode deux cameras : inutiles sur un lot a une camera
-  if(REELS[0].ecran){const t=document.querySelectorAll('.src h2 span:first-child');
-   t[0].textContent='Haut — cadre fixe';t[1].textContent='Bas — cadre à régler'}
-  choisirFormat(j.formats[0])}
- if(REELS.every(r=>!r.ecran)){document.body.classList.add('solo');if(!j.formats)choisirFormat('hsolo')}
+ if(REELS.every(r=>!r.ecran))document.body.classList.add('solo');
+ else{// libelles du mode deux cameras : inutiles sur un lot a une camera
+  const h=document.querySelectorAll('.src h2 span:first-child');
+  h[0].textContent='Haut — cadre fixe';h[1].textContent='Bas — cadre à régler'}
+ montrerFormats(j.formats);
  REELS.forEach(r=>{const o=document.createElement('option');o.value=r.id;
   o.textContent=`${r.nom} (${hms(r.duree)})`;selP.appendChild(o)});
  marquerReels();chargerReel(REELS[0].id)}).catch(err=>{vId('etat').textContent='Chargement impossible : '+err.message});
+}
+// La table des formats conditionne tout le reste : rien ne s'affiche avant elle.
+fetch('/formats.json?'+Date.now()).then(r=>r.json()).then(tab=>{
+ FORMATS=tab.formats;ORDRE_FMT=tab.ordre;construireFormats();montrerFormats(null);chargerLot()})
+ .catch(err=>{vId('etat').textContent='Table des formats illisible : '+err.message});
 </script></body></html>

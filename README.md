@@ -133,16 +133,32 @@ Les fichiers finis arrivent dans `rendus/<sortie>/Vertical/` ou `Horizontal/`.
 
 ## Les formats
 
+La géométrie de tous les formats vit dans **un seul fichier**,
+`scripts/formats.json`. La page le lit tel quel sur `/formats.json`, les deux
+moteurs de rendu le lisent par `scripts/formats.py`. Ajouter un format, c'est
+ajouter une entrée dans ce fichier : rien à recopier ailleurs.
+
 | Clé | Rendu |
 |---|---|
 | `vmc` | 1080×1920, deux caméras empilées 50/50 |
-| `hmc` | 1920×1080, caméra à gauche, écran à droite |
+| `v8020` | 1080×1920, haut 80 %, bas 20 % |
+| `v7030` | 1080×1920, haut 70 %, bas 30 % |
+| `hmc` | 1920×1080, caméra à gauche sur 720, écran à droite |
+| `h5050` | 1920×1080, deux caméras côte à côte |
+| `vcons` | 1080×1920, deux cadrages du même rush, empilés |
+| `v6535` `v6040` | 1080×1920, autres proportions à comparer |
 | `hsolo` | 1920×1080, une caméra, sous-titres du côté libre du visage |
 | `carre` | 1080×1080, la vidéo d'origine entre deux bandes noires |
-| `v7030` `v6535` `v6040` | 1080×1920, deux caméras, proportions à comparer |
-| `h5050` | 1920×1080, deux caméras côte à côte |
 
-Un lot ne propose que les formats listés dans son manifeste.
+Un lot à deux caméras propose par défaut **tous** les formats à deux caméras ; un
+lot à une caméra, les formats à une caméra. Le manifeste du lot peut restreindre
+la liste avec sa clé `"formats"`.
+
+Chaque format garde ses propres cadres : un cadrage posé en 50/50 ne part pas en
+80/20, et revenir au 50/50 retrouve le sien. Les cadres par défaut du lot
+(`"cadres"`) s'appliquent à chaque format qu'ils nomment. Le nom du fichier rendu
+porte le format, donc un même reel peut sortir en plusieurs formats sans qu'ils
+s'écrasent.
 
 ---
 

@@ -1,0 +1,92 @@
+{
+ "_lisez_moi": [
+  "La table des formats, partagee par la page (outil/index.html, via /formats.json)",
+  "et par les deux moteurs de rendu (produire-split.py, rendre-depuis-points.py).",
+  "Un seul endroit : un cadre pose dans la page tombe exactement la ou le rendu le met.",
+  "",
+  "W, H       : dimensions du fichier produit.",
+  "zones      : ou chaque camera est posee dans ce cadre, en pixels de la sortie.",
+  "  source   : camera = le rush du haut, ecran = le second rush.",
+  "             Le vertical consulting prend les DEUX zones dans le rush du haut.",
+  "  absence de zone b : format a une seule camera.",
+  "fond       : visible seulement la ou les zones ne couvrent pas tout.",
+  "deux_cameras : propose par defaut sur un lot a deux cameras. Le manifeste du",
+  "             lot peut restreindre la liste avec sa cle \"formats\".",
+  "fichier    : ce que le nom du reel rendu porte, pour que deux formats du meme",
+  "             reel ne s'ecrasent pas."
+ ],
+
+ "ordre": ["vmc", "v8020", "v7030", "hmc", "h5050", "vcons",
+           "v6535", "v6040", "hsolo", "carre"],
+
+ "formats": {
+  "vmc": {
+   "nom": "Vertical 50/50", "fichier": "vertical 50-50", "deux_cameras": true,
+   "detail": "1080 × 1920 — deux caméras empilées, moitié-moitié",
+   "W": 1080, "H": 1920, "fond": "#D4CCBE",
+   "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 960, "source": "camera"},
+             "b": {"x": 0, "y": 960, "w": 1080, "h": 960, "source": "ecran"}}
+  },
+  "v8020": {
+   "nom": "Vertical 80/20", "fichier": "vertical 80-20", "deux_cameras": true,
+   "detail": "1080 × 1920 — haut 80 %, bas 20 %",
+   "W": 1080, "H": 1920, "fond": "#000000",
+   "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 1536, "source": "camera"},
+             "b": {"x": 0, "y": 1536, "w": 1080, "h": 384, "source": "ecran"}}
+  },
+  "v7030": {
+   "nom": "Vertical 70/30", "fichier": "vertical 70-30", "deux_cameras": true,
+   "detail": "1080 × 1920 — haut 70 %, bas 30 %",
+   "W": 1080, "H": 1920, "fond": "#000000",
+   "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 1344, "source": "camera"},
+             "b": {"x": 0, "y": 1344, "w": 1080, "h": 576, "source": "ecran"}}
+  },
+  "hmc": {
+   "nom": "Horizontal", "fichier": "horizontal", "deux_cameras": true,
+   "detail": "1920 × 1080 — caméra à gauche sur 720, écran à droite",
+   "W": 1920, "H": 1080, "fond": "#000000",
+   "zones": {"a": {"x": 0, "y": 0, "w": 720, "h": 1080, "source": "camera"},
+             "b": {"x": 720, "y": 0, "w": 1200, "h": 1080, "source": "ecran"}}
+  },
+  "h5050": {
+   "nom": "Horizontal 50/50", "fichier": "horizontal 50-50", "deux_cameras": true,
+   "detail": "1920 × 1080 — deux caméras côte à côte, moitié-moitié",
+   "W": 1920, "H": 1080, "fond": "#000000",
+   "zones": {"a": {"x": 0, "y": 0, "w": 960, "h": 1080, "source": "camera"},
+             "b": {"x": 960, "y": 0, "w": 960, "h": 1080, "source": "ecran"}}
+  },
+  "vcons": {
+   "nom": "Vertical consulting", "fichier": "vertical consulting", "deux_cameras": true,
+   "detail": "1080 × 1920 — deux cadrages du même rush, empilés",
+   "W": 1080, "H": 1920, "fond": "#000000",
+   "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 960, "source": "camera"},
+             "b": {"x": 0, "y": 960, "w": 1080, "h": 960, "source": "camera"}}
+  },
+  "v6535": {
+   "nom": "Vertical 65/35", "fichier": "vertical 65-35", "deux_cameras": true,
+   "detail": "1080 × 1920 — haut 65 %, bas 35 %",
+   "W": 1080, "H": 1920, "fond": "#000000",
+   "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 1248, "source": "camera"},
+             "b": {"x": 0, "y": 1248, "w": 1080, "h": 672, "source": "ecran"}}
+  },
+  "v6040": {
+   "nom": "Vertical 60/40", "fichier": "vertical 60-40", "deux_cameras": true,
+   "detail": "1080 × 1920 — haut 60 %, bas 40 %",
+   "W": 1080, "H": 1920, "fond": "#000000",
+   "zones": {"a": {"x": 0, "y": 0, "w": 1080, "h": 1152, "source": "camera"},
+             "b": {"x": 0, "y": 1152, "w": 1080, "h": 768, "source": "ecran"}}
+  },
+  "hsolo": {
+   "nom": "Horizontal une caméra", "fichier": "horizontal solo", "deux_cameras": false,
+   "detail": "1920 × 1080 — une caméra, sous-titres du côté libre du visage",
+   "W": 1920, "H": 1080, "fond": "#000000",
+   "zones": {"a": {"x": 0, "y": 0, "w": 1920, "h": 1080, "source": "camera"}}
+  },
+  "carre": {
+   "nom": "Carré 1:1", "fichier": "carre", "deux_cameras": false,
+   "detail": "1080 × 1080 — la vidéo d'origine entre deux bandes noires",
+   "W": 1080, "H": 1080, "fond": "#000000",
+   "zones": {"a": {"x": 0, "y": 236, "w": 1080, "h": 608, "source": "camera"}}
+  }
+ }
+}

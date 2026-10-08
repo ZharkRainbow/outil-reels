@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urlparse, unquote
 RACINE = Path(__file__).parent
 sys.path.insert(0, str(RACINE.parent / "scripts"))
 import reglages
+import formats
 
 DEPOT = Path(os.environ.get("REELS_CADRAGES", RACINE / "cadrages"))
 RENDU = RACINE.parent / "scripts" / "rendre-reel.py"
@@ -186,9 +187,12 @@ class H(SimpleHTTPRequestHandler):
                     d[cle] = fiche[cle]
             d["lot"], d["sortie"], d["rendu"] = lot.get("lot"), lot.get("sortie"), lot.get("rendu")
             # le nom porte le format, quelle que soit la version de la page qui envoie :
-            # sinon le vertical et l'horizontal d'un meme reel s'ecrasent
-            format_ = {"vmc": "vertical", "hmc": "horizontal", "hsolo": "horizontal",
-                       "carre": "carre"}.get(d.get("format")) or d.get("format") or "vertical"
+            # sinon deux formats du meme reel s'ecrasent. Le libelle vient de la
+            # table partagee, pas d'une liste recopiee ici.
+            try:
+                format_ = formats.nom_fichier(d.get("format") or "vmc")
+            except ValueError:
+                return self.send_error(400, "Format inconnu")
             d["passage"] = f"{d.get('lot_id') or d.get('lot') or 'Reel'} {d['reel']} - {format_}"
         nom = str(d.get("passage") or "sans-passage").replace("/", "-")[:60]
         nom = re.sub(r'[\\/:\x00-\x1f]', '-', nom)
@@ -216,6 +220,9 @@ class H(SimpleHTTPRequestHandler):
         if not self.hote_local():
             return
         url = urlparse(self.path)
+        if url.path == "/formats.json":
+            # la page lit la meme table que les scripts de rendu
+            return self.repondre(json.loads(formats.FICHIER.read_text(encoding="utf-8")))
         if url.path == "/lots":
             lots = [] if (Path(reglages.LOTS) / "exemple" / "reels.json").exists() else [{"id": "exemple", "nom": "Exemple"}]
             chemins = list(Path(reglages.LOTS).glob("*/reels.json"))

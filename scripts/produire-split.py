@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Rendu brut d'un reel deux cameras, sans habillage : le cadre fixe du premier
-point de cadrage, le depart et la fin choisis dans l'outil, les coupes gardees.
-Ni sous-titres, ni titre, ni traitement du son. C'est la version a valider avant
+"""Rendu brut d'un reel, sans habillage : le cadre fixe du premier point de
+cadrage, le depart et la fin choisis dans l'outil, les coupes gardees. Ni
+sous-titres, ni titre, ni traitement du son. C'est la version a valider avant
 la finition.
 
     python3 produire-split.py "outil/cadrages/<nom>.json" "<dossier de sortie>"
 
+Tous les formats de scripts/formats.json sont rendus par le meme chemin : un
+fond de la taille demandee, puis une zone posee par-dessus. La geometrie n'est
+ecrite nulle part ici — un cadre pose dans la page tombe donc exactement la ou
+le rendu le met, sans avoir a encoder pour s'en apercevoir.
+
 Le son vient du mix préparé avec --mixer-son, sinon de la caméra du haut.
-Les cadres de l'outil sont exprimes dans le repere de la camera du haut : le
-cadre du bas est remis a l'echelle de sa propre source.
+Les cadres de l'outil sont exprimes dans le repere de la source de l'outil :
+chaque zone est remise a l'echelle de la source dont elle vient.
 """
 import json
 import platform
@@ -21,6 +26,7 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 reglages = import_module("reglages")
+formats = import_module("formats")
 
 
 def flux_video(chemin):
@@ -34,14 +40,13 @@ def flux_video(chemin):
 
 
 def verifier(d):
-    """Ce script ne sait faire qu'une chose : deux cameras empilees, un cadre
-    fixe. Mieux vaut le dire que de sortir un reel qui n'est pas le bon, ou un
+    """Mieux vaut une phrase que de sortir un reel qui n'est pas le bon, ou un
     traceback Python, puisque l'outil n'affiche que la derniere ligne du journal."""
-    if d.get("format", "vmc") != "vmc":
-        raise ValueError(f"Le rendu brut ne fait que le vertical deux caméras, "
-                         f"pas le format « {d.get('format')} »")
-    if not d.get("ecran"):
-        raise ValueError("Le rendu brut assemble deux caméras : ce reel n'en déclare qu'une")
+    f = formats.trouver(d.get("format", "vmc"))
+    if any(z["source"] == "ecran" for _, z in formats.zones(d.get("format", "vmc"))) \
+            and not d.get("ecran"):
+        raise ValueError(f"Le format « {f['nom']} » assemble deux caméras : "
+                         f"ce reel n'en déclare qu'une")
     if not d.get("points"):
         raise ValueError("Aucun cadrage posé : pose un cadrage avant d'envoyer en production")
     if not d.get("debuts") or d.get("fin") is None:
@@ -52,7 +57,10 @@ def verifier(d):
 
 
 def rendre(d, sortie):
-    cam, ecran = RACINE / d["camera"], RACINE / d["ecran"]
+    # un format a une seule camera n'ouvre pas de second rush : on reprend le
+    # premier, ffmpeg ne lira simplement jamais son flux
+    cam = RACINE / d["camera"]
+    ecran = RACINE / d["ecran"] if d.get("ecran") else cam
     large_cam, ips, cadence = flux_video(cam)
 
     # Les bornes sont calees sur la grille d'images de la camera du haut.
@@ -80,11 +88,24 @@ def rendre(d, sortie):
     # Les cadres arrivent dans le repere de l'outil (d["source"]) : on les
     # ramene a l'echelle de chaque source. Le facteur est pris sur la largeur,
     # ce qui suppose des rushes 16:9 comme le proxy.
+    cle = d.get("format", "vmc")
+    f_ = formats.trouver(cle)
     p = d["points"][0]
-    k = large_cam / d["source"]["w"]
-    h = {z: round(p["camera"][z] * k) for z in ("x", "y", "w", "h")}
-    k = flux_video(ecran)[0] / d["source"]["w"]
-    e = {z: round(p["ecran"][z] * k) for z in ("x", "y", "w", "h")}
+    # le cadre "camera" du point alimente la zone a, le cadre "ecran" la zone b.
+    # Quelle source les fournit, c'est la table qui le dit : le vertical
+    # consulting prend ses DEUX zones dans le rush du haut.
+    large = {"camera": large_cam, "ecran": flux_video(ecran)[0] if d.get("ecran") else large_cam}
+    cadre = {"a": p["camera"], "b": p.get("ecran")}
+    entree = {"camera": "0:v", "ecran": "1:v"}
+    decoupes = []
+    for nom_zone, z in formats.zones(cle):
+        if cadre[nom_zone] is None:
+            raise ValueError(f"Le format « {f_['nom']} » attend deux cadres, "
+                             f"le cadrage n'en porte qu'un")
+        k = large[z["source"]] / d["source"]["w"]
+        decoupes.append((nom_zone, z, {c: round(cadre[nom_zone][c] * k)
+                                       for c in ("x", "y", "w", "h")}))
+
     sortie.mkdir(parents=True, exist_ok=True)
     morceaux = []
     decal = d.get("decalage") or 0
@@ -92,21 +113,35 @@ def rendre(d, sortie):
     rotation = ",hflip,vflip" if d.get("retourner_ecran") else ""
     audio = "2:a" if d.get("audio") else "0:a"
     for i, (s, f) in enumerate(gardes):
-        morceaux.append(
-            f"[0:v]trim={s}:{f},setpts=PTS-STARTPTS,fps={cadence},crop={h['w']}:{h['h']}:{h['x']}:{h['y']},"
-            f"scale=1080:960,setsar=1[h{i}];"
-            f"[1:v]{alignement}{rotation},trim={s}:{f},setpts=PTS-STARTPTS,fps={cadence},"
-            f"crop={e['w']}:{e['h']}:{e['x']}:{e['y']},"
-            f"scale=1080:960,setsar=1[b{i}];"
-            f"[h{i}][b{i}]vstack,fps=30,format=yuv420p[v{i}];"
-            f"[{audio}]atrim={s}:{f},asetpts=PTS-STARTPTS[a{i}];")
-    filtre = "".join(morceaux) + "".join(f"[v{i}][a{i}]" for i in range(len(gardes))) \
+        bout = ""
+        for nom_zone, z, c in decoupes:
+            # seul le second rush porte le decalage de calage et le retournement
+            avant = f"{alignement}{rotation}," if z["source"] == "ecran" else ""
+            bout += (f"[{entree[z['source']]}]{avant}trim={s}:{f},setpts=PTS-STARTPTS,"
+                     f"fps={cadence},crop={c['w']}:{c['h']}:{c['x']}:{c['y']},"
+                     f"scale={z['w']}:{z['h']},setsar=1[z{nom_zone}{i}];")
+        # un fond aux dimensions du format, puis une zone posee par-dessus.
+        # shortest=1 sur le premier overlay : sans lui, le fond de « color » est
+        # infini et le rendu ne s'arrete jamais.
+        bout += (f"color=c={formats.fond(cle)}:s={f_['W']}x{f_['H']}:r={cadence}[f{i}];")
+        avant = f"f{i}"
+        for n, (nom_zone, z, _) in enumerate(decoupes):
+            apres = f"v{i}" if n == len(decoupes) - 1 else f"p{n}{i}"
+            bout += (f"[{avant}][z{nom_zone}{i}]overlay={z['x']}:{z['y']}"
+                     f"{':shortest=1' if n == 0 else ''}[{apres}];")
+            avant = apres
+        morceaux.append(bout + f"[{avant}]format=yuv420p[w{i}];"
+                               f"[{audio}]atrim={s}:{f},asetpts=PTS-STARTPTS[a{i}];")
+    filtre = "".join(morceaux) + "".join(f"[w{i}][a{i}]" for i in range(len(gardes))) \
         + f"concat=n={len(gardes)}:v=1:a=1[v][a]"
 
     titre = re.sub(r"[^\w\s'-]", "", d.get("titre", "")).strip()
     ident = re.sub(r'[/:\\\x00-\x1f]', '-', str(d['reel']))
-    nom = f"{ident} - {titre}.mp4" if titre else f"{ident}.mp4"
-    print(f"{len(gardes)} morceau(x), {sum(f - s for s, f in gardes):.1f} s -> {nom}", flush=True)
+    # le nom porte le format : deux formats du meme reel cohabitent dans le dossier
+    suffixe = f" - {f_['fichier']}"
+    nom = (f"{ident} - {titre}{suffixe}.mp4" if titre else f"{ident}{suffixe}.mp4")
+    print(f"{f_['nom']} — {len(gardes)} morceau(x), "
+          f"{sum(f - s for s, f in gardes):.1f} s -> {nom}", flush=True)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(cam), "-i", str(ecran),
                     *(["-i", d["audio"]] if d.get("audio") else []),
                     # un seul thread de filtrage : sur deux coeurs, en paralleliser

@@ -18,6 +18,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import formats
+
 CAM = Path("camera.mp4")   # surcharge par les arguments de la ligne de commande
 SCR = Path("ecran.mp4")    # idem
 SCRIPTS = Path(__file__).parent
@@ -27,11 +30,18 @@ HABILLAGE = {
     "vcons": dict(cap_y=0.4513, cap_taille=0.023, titre_y=0.4997),
     "hmc":   dict(cap_y=0.880,  cap_taille=0.032, titre_y=0.792, halo=True),
 }
-LAYOUT = {
-    "vmc":   dict(W=1080, H=1920, a=(0, 0, 1080, 960),  b=(0, 960, 1080, 960), fond="0xD4CCBE"),
-    "hmc":   dict(W=1920, H=1080, a=(0, 0, 720, 1080),  b=(720, 0, 1200, 1080), fond="0x000000"),
-    "vcons": dict(W=1080, H=1920, a=(0, 0, 1080, 960),  b=(0, 960, 1080, 960), fond="0x000000"),
-}
+
+
+def layout(cle):
+    """La geometrie du format, lue dans scripts/formats.json comme la page et
+    le rendu brut. Ce script habille deux zones ; un format a une seule camera
+    n'a rien a habiller ici."""
+    f = formats.trouver(cle)
+    z = f["zones"]
+    if "b" not in z:
+        sys.exit(f"Le rendu habille attend deux zones, « {f['nom']} » n'en a qu'une.")
+    coins = lambda n: (z[n]["x"], z[n]["y"], z[n]["w"], z[n]["h"])
+    return dict(W=f["W"], H=f["H"], a=coins("a"), b=coins("b"), fond=formats.fond(cle))
 
 
 def expression(pts, zone, axe, t0):
@@ -66,7 +76,7 @@ def main():
     opt = {a[i]: a[i + 1] for i in range(1, len(a) - 1) if a[i].startswith("--")}
     t0, t1 = float(opt.get("--in", 0)), float(opt.get("--out", 0))
     dst = Path(opt["--sortie"])
-    lay = LAYOUT[data.get("format", "vmc")]
+    lay = layout(data.get("format", "vmc"))
 
     pts = [{"t": p["t"], "glisse": p.get("glisse", False),
              "A": p["camera"], "B": p["ecran"]} for p in data["points"]]
@@ -88,7 +98,9 @@ def main():
     bw, bh = taille(dedans, "B")
     ax, ay = expression(dedans, "A", "x", t0), expression(dedans, "A", "y", t0)
     bx, by = expression(dedans, "B", "x", t0), expression(dedans, "B", "y", t0)
-    srcB = CAM if data.get("format") == "vcons" else SCR
+    # quelle source alimente la zone du bas : c'est la table qui le dit
+    srcB = (CAM if formats.trouver(data.get("format", "vmc"))["zones"]["b"]["source"] == "camera"
+            else SCR)
     aX, aY, aW, aH = lay["a"]
     bX, bY, bW, bH = lay["b"]
 
@@ -114,7 +126,10 @@ def main():
                        capture_output=True)
         srt = opt.get("--srt")
         if srt and Path(srt).exists():
-            hab = HABILLAGE[data.get("format", "vmc")]
+            # les formats verticaux ajoutes depuis partagent les reperes du 50/50
+            cle = data.get("format", "vmc")
+            f_ = formats.trouver(cle)
+            hab = HABILLAGE.get(cle, HABILLAGE["hmc" if f_["W"] > f_["H"] else "vmc"])
             cmd = ["python3", str(SCRIPTS / "incruster-captions.py"), str(brut), srt,
                    str(dst), "--y", str(hab["cap_y"]),
                    "--taille", str(hab["cap_taille"])]

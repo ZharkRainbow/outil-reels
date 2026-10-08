@@ -14,7 +14,7 @@
  "_champs": {
   "lot": "nom affiche en haut de l'interface",
   "sortie": "sous-dossier cree dans REELS_SORTIE pour les fichiers finis",
-  "formats": "formats proposes. vmc = vertical deux cameras, hmc = horizontal deux cameras, hsolo = horizontal une camera, carre = 1:1 une camera, v7030/v6535/v6040/h5050 = proportions a comparer",
+  "formats": "optionnel : restreint les formats proposes. Sans cette cle, tous les formats a deux cameras de scripts/formats.json sont proposes sur un lot a deux cameras, et tous les formats a une camera sur un lot a une camera",
   "rendu": "false pour que l'outil enregistre le cadrage sans lancer le rendu",
   "passages": "optionnel : [[titre, debut, fin], ...] pour cadrer une longue prise morceau par morceau"
  },
