@@ -357,6 +357,7 @@ async function envoyerProduction(route){
  try{
   const r=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:vId('sortie').value});
   const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.erreur||'Envoi refusé');
+  if(reel){validations[reel.id]=true;try{localStorage.setItem(CLE+'-validations',JSON.stringify(validations))}catch(err){}marquerReels()}
   if(j.nom){e.textContent='En file : '+j.nom;suivre(j.nom)}
   else e.textContent='Cadrage enregistré : '+j.fichier;
  }catch(err){e.textContent='Échec : '+err.message}
@@ -424,8 +425,9 @@ let LOTP=new URLSearchParams(location.search).get('lot');
 try{LOTP=LOTP||localStorage.getItem('recadrage-lot')}catch(e){}
 LOTP=LOTP||'exemple';
 try{localStorage.setItem('recadrage-lot',LOTP)}catch(e){}
+vId('lotSel').add(new Option(LOTP,LOTP));
 vId('lotSel').value=LOTP;
-vId('lotSel').onchange=e=>{location.search='?lot='+e.target.value};
+vId('lotSel').onchange=e=>{location.search='?lot='+encodeURIComponent(e.target.value)};
 const CLE='recadrage-reels-v1'+(LOTP!=='reels'?'-'+LOTP:'');
 // centre du cadre suivi a l'instant t (pixels source), largeur donnee par le format
 function suiviA(t){
@@ -436,6 +438,9 @@ function suiviA(t){
   const f=(t-suivi[i][0])/(suivi[i+1][0]-suivi[i][0]);cx=suivi[i][1]+(suivi[i+1][1]-suivi[i][1])*f;break}}
  const z=FORMATS[fmt].a;let h=SRC_H,w=Math.round(h*z.w/z.h);if(w>SRC_W){w=SRC_W;h=Math.round(w*z.h/z.w)}
  return {x:Math.max(0,Math.min(SRC_W-w,Math.round(cx-w/2))),y:0,w,h}}
+let validations={};
+try{validations=JSON.parse(localStorage.getItem(CLE+'-validations')||'{}')}catch(e){}
+function marquerReels(){if(!REELS)return;REELS.forEach((r,i)=>{selP.options[i].textContent=`${validations[r.id]?'✓':'○'} ${r.nom} (${hms(r.duree)})`})}
 try{etats=JSON.parse(localStorage.getItem(CLE)||'{}')}catch(e){etats={}}
 // sans point pose, le cadre affiche vaut cadrage pour toute la video : c'est ce
 // que l'on voit a l'ecran, l'envoyer vide obligeait a deviner le cadrage
@@ -562,14 +567,16 @@ function suivre(nom){
 fetch(LOTP+'/reels.json?'+Date.now()).then(r=>r.ok?r.json():null).then(j=>{
  if(!j||!j.reels||!j.reels.length)return;
  REELS=j.reels;LOT={lot:j.lot,sortie:j.sortie,cadres:j.cadres||null};document.body.classList.add('reels');selP.textContent='';
+ vId('lotSel').selectedOptions[0].textContent=j.lot||LOTP;
  if(j.formats){
+  vId('fmt').style.display=j.formats.length===1?'none':'';
   [...vId('fmt').children].forEach(b=>b.style.display=j.formats.includes(b.dataset.f)?'block':'none');
   // libelles du mode deux cameras : inutiles sur un lot a une camera
   if(REELS[0].ecran){const t=document.querySelectorAll('.src h2');
-   t[0].firstChild.nodeValue=(LOT.cadres?'Haut — cadre fixe ':'Haut — suivi automatique ');t[1].firstChild.nodeValue='Bas — cadre a regler '}
+   t[0].firstChild.nodeValue='Haut — cadre fixe ';t[1].firstChild.nodeValue='Bas — cadre a regler '}
   choisirFormat(j.formats[0])}
  if(REELS.every(r=>!r.ecran)){document.body.classList.add('solo');choisirFormat('hsolo')}
  REELS.forEach(r=>{const o=document.createElement('option');o.value=r.id;
   o.textContent=`${r.nom} (${hms(r.duree)})`;selP.appendChild(o)});
- chargerReel(REELS[0].id)}).catch(()=>{});
+ marquerReels();chargerReel(REELS[0].id)}).catch(()=>{});
 </script></body></html>
