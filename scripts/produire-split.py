@@ -20,33 +20,48 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent.parent
 
 
-def largeur(chemin):
+def flux_video(chemin):
+    """Largeur et cadence de la piste image, lues par ffprobe."""
     r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-                        "stream=width", "-of", "csv=p=0", str(chemin)],
+                        "stream=width,r_frame_rate", "-of", "json", str(chemin)],
                        capture_output=True, text=True, check=True)
-    return int(r.stdout.strip())
+    flux = json.loads(r.stdout)["streams"][0]
+    num, _, den = flux["r_frame_rate"].partition("/")
+    return int(flux["width"]), int(num) / int(den or 1), flux["r_frame_rate"]
 
 
 def rendre(d, sortie):
-    sortie.mkdir(parents=True, exist_ok=True)
     cam, ecran = RACINE / d["camera"], RACINE / d["ecran"]
-    a, b = d["debuts"][0], d["fin"]
+    large_cam, ips, cadence = flux_video(cam)
+
+    # Les bornes sont calees sur la grille d'images de la camera du haut.
+    # trim ne retient que des images entieres alors que atrim coupe le son a
+    # l'echantillon : sans ce calage, concat etire chaque morceau jusqu'a sa
+    # piste la plus longue et l'ecart s'accumule a chaque coupe. Sur neuf
+    # morceaux le reel sortait 0,3 s trop long, l'image en retard sur le son.
+    grille = lambda t: round(t * ips) / ips
+    a, b = grille(d["debuts"][0]), grille(d["fin"])
 
     gardes, t = [], a
-    for x, y in sorted(c for c in d.get("coupes", []) if c[1] > a and c[0] < b):
+    for x, y in sorted((grille(c[0]), grille(c[1]))
+                       for c in d.get("coupes", []) if c[1] > a and c[0] < b):
         if x > t:
             gardes.append((t, min(x, b)))
         t = max(t, y)
     if t < b:
         gardes.append((t, b))
-
-    p = d["points"][0]
-    k = largeur(cam) / d["source"]["w"]
-    h = {z: round(p["camera"][z] * k) for z in ("x", "y", "w", "h")}
-    k = largeur(ecran) / d["source"]["w"]
-    e = {z: round(p["ecran"][z] * k) for z in ("x", "y", "w", "h")}
+    # un morceau de moins de deux images ne survit pas au trim : concat
+    # recevrait un segment vide
+    gardes = [(s, f) for s, f in gardes if f - s >= 2 / ips]
     if not gardes:
         raise ValueError("Le montage est vide : vérifier début, fin et coupes")
+
+    p = d["points"][0]
+    k = large_cam / d["source"]["w"]
+    h = {z: round(p["camera"][z] * k) for z in ("x", "y", "w", "h")}
+    k = flux_video(ecran)[0] / d["source"]["w"]
+    e = {z: round(p["ecran"][z] * k) for z in ("x", "y", "w", "h")}
+    sortie.mkdir(parents=True, exist_ok=True)
     morceaux = []
     decal = d.get("decalage") or 0
     alignement = f"trim=start={decal},setpts=PTS-STARTPTS" if decal >= 0 else f"tpad=start_duration={-decal}:start_mode=clone"
@@ -54,9 +69,10 @@ def rendre(d, sortie):
     audio = "2:a" if d.get("audio") else "0:a"
     for i, (s, f) in enumerate(gardes):
         morceaux.append(
-            f"[0:v]trim={s}:{f},setpts=PTS-STARTPTS,crop={h['w']}:{h['h']}:{h['x']}:{h['y']},"
+            f"[0:v]trim={s}:{f},setpts=PTS-STARTPTS,fps={cadence},crop={h['w']}:{h['h']}:{h['x']}:{h['y']},"
             f"scale=1080:960,setsar=1[h{i}];"
-            f"[1:v]{alignement}{rotation},trim={s}:{f},setpts=PTS-STARTPTS,crop={e['w']}:{e['h']}:{e['x']}:{e['y']},"
+            f"[1:v]{alignement}{rotation},trim={s}:{f},setpts=PTS-STARTPTS,fps={cadence},"
+            f"crop={e['w']}:{e['h']}:{e['x']}:{e['y']},"
             f"scale=1080:960,setsar=1[b{i}];"
             f"[h{i}][b{i}]vstack,fps=30,format=yuv420p[v{i}];"
             f"[{audio}]atrim={s}:{f},asetpts=PTS-STARTPTS[a{i}];")
