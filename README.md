@@ -121,6 +121,29 @@ Puis ouvre **http://localhost:8765/?lot=Matin** — ou double-clique
 Tu passes d'une prise à l'autre avec le menu en haut. Ton travail est gardé dans
 le navigateur au fur et à mesure : tu peux fermer et revenir.
 
+**La piste**, en bas, tient en trois lignes. La ligne de transport : lecture,
+`00:00.0 / 00:27.2`, puis à droite la sensibilité de détection des blancs
+(**Léger · Normal · Serré** — c'est la durée minimale d'une pause coupée, 0,50 /
+0,35 / 0,25 s), **✂ Supprimer les blancs** et **Rétablir**. La piste elle-même :
+la forme d'onde pleine largeur, la zone gardée encadrée entre deux poignées
+qu'on attrape et qu'on glisse, les blancs supprimés hachurés dedans ; hors
+bornes l'onde reste visible, en retrait — on voit le rush avant et après. Sous
+la piste : **Début**, la fenêtre du rush, **Fin**, avec des sauts de 0,1 et
+0,5 s. Les mots transcrits sont dans l'onglet **Transcript**, à côté de
+**Aperçu**.
+
+**L'étalonnage**, sous chaque caméra : trois choix, pas un de plus — *Aucun*,
+*709 · Apple Cinestyle*, *Délog · Log M → Rec.709*. L'outil mesure le rush
+(cinq images passées à `signalstats`) et propose : Log détecté → Délog, Rec.709
+→ Aucun. Une image fixe de contrôle montre la LUT posée ; on appuie dessus pour
+voir le rush sans elle. **Les `.cube` ne sont pas dans le dépôt** : ils vivent
+dans `REELS_LUTS` (défaut `~/luts`), et un fichier absent est annoncé dans le
+menu, pas au bout de dix minutes d'encodage.
+
+**Le titre** est en tête de la colonne de droite, pré-rempli par le manifeste du
+lot. Il nomme le fichier produit. Le champ *position* (haut / milieu / aucune)
+est enregistré pour l'incrustation à venir — rien n'est encore incrusté.
+
 ### 3. Exporter
 
 Un seul geste : **Valider et reel suivant ›** (raccourci `N`) enregistre le
@@ -221,6 +244,7 @@ rien configurer.
 | `REELS_POLICE` / `REELS_POLICE_TITRE` | ZTNature | polices des sous-titres |
 | `REELS_COULEUR_CAPTIONS` / `REELS_COULEUR_TITRE` | `#FAD400` / `#2322E0` | couleurs |
 | `REELS_CADRAGES` | `outil/cadrages/` | cadrages enregistrés et journaux |
+| `REELS_LUTS` | `~/luts` | dossier des `.cube` d'étalonnage — **pas dans le dépôt** |
 | `REELS_PORT` | `8765` | port du serveur local |
 
 `python3 scripts/reglages.py` affiche les valeurs actives et ce qui manque.
