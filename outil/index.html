@@ -6,7 +6,9 @@
 :root{
  --bleu:#2322E0;--bleu-clair:#4a49ff;--jaune:#FAD400;--vert:#3ddc84;--rouge:#ff5b7a;
  --fond:#141417;--noir:#191919;--gris:#26262b;--gris-clair:#2e2e35;--bord:#3a3a42;
- --texte:#e8e8ea;--doux:#9a9aa2;--tres-doux:#7a7a84}
+ --texte:#e8e8ea;--doux:#9a9aa2;--tres-doux:#7a7a84;
+ /* la piste : fond plus sombre que le reste pour que la forme d'onde ressorte */
+ --piste:#0d0d0f;--liseré:#1d1d20;--ambre:#e9a84b;--ambre-clair:#f4c474}
 *{box-sizing:border-box}
 body{margin:0;background:var(--fond);color:var(--texte);
  font:13px/1.5 -apple-system,system-ui,sans-serif;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
@@ -96,35 +98,90 @@ td button{background:none;border:0;color:var(--rouge);cursor:pointer;font-size:1
 .hint{color:#8a8a92;font-size:11px;line-height:1.5;margin:8px 0 0}
 textarea{display:none}
 
-/* ---- Barre du bas : une piste, des commandes groupees --------------- */
-.piste{background:var(--noir);border-top:1px solid var(--bord);padding:9px 16px 12px;flex:none}
-.entete-piste{display:flex;align-items:center;gap:16px;margin-bottom:6px;font-size:11px;color:var(--doux)}
-.zoom{display:flex;align-items:center;gap:7px}
-.zoom input{width:120px}
-.timeline{overflow-x:auto;overflow-y:hidden}
-.rail{position:relative;height:66px;background:#1b1b20;border:1px solid var(--bord);
- border-radius:6px;cursor:pointer;margin-bottom:6px}
-.grad{position:absolute;top:0;bottom:0;width:1px;background:#32323a;pointer-events:none}
-.grad span{position:absolute;top:1px;left:3px;font:9px ui-monospace,monospace;color:#5c5c66}
-.zone{position:absolute;top:0;bottom:0;background:rgba(35,34,224,.25);border-left:2px solid var(--bleu);pointer-events:none}
-.mk{position:absolute;top:0;bottom:0;width:3px;background:var(--jaune);cursor:pointer;z-index:4}
+/* ---- La piste : forme d'onde, curseur attrapable, mots et coupes ----- */
+.piste{background:var(--noir);border-top:1px solid var(--bord);padding:8px 16px 11px;flex:none}
+
+/* barre de transport au-dessus de la piste */
+.transport{display:flex;align-items:center;gap:12px;margin-bottom:9px;min-height:38px}
+.lecture{width:38px;height:38px;flex:none;border:0;border-radius:50%;cursor:pointer;padding:0;
+ background:linear-gradient(180deg,var(--ambre-clair),var(--ambre));color:#1a130a;
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 6px 16px -6px rgba(233,168,75,.7);
+ display:flex;align-items:center;justify-content:center;transition:transform .12s}
+.lecture:hover{transform:scale(1.06)}
+.lecture svg{width:14px;height:15px;fill:currentColor;pointer-events:none}
+.horloge{font:12px ui-monospace,Menlo,monospace;min-width:108px;
+ font-variant-numeric:tabular-nums;white-space:nowrap}
+.horloge b{color:var(--jaune);font-weight:600}
+.horloge span{color:var(--tres-doux)}
+.indice{font-size:11.5px;color:var(--tres-doux);display:flex;align-items:center;gap:6px;
+ flex-wrap:wrap}
+
+/* la piste elle-meme */
+.rail{position:relative;height:104px;background:var(--piste);border-radius:8px;
+ box-shadow:inset 0 0 0 1px var(--liseré);cursor:text;touch-action:none;
+ user-select:none;-webkit-user-select:none;margin:0 7px 5px}
+/* un canvas est un element remplace : avec left et right poses, le navigateur
+   garde sa largeur intrinseque de 300 px et ignore right. D'ou les dimensions
+   explicites, qui restent calculees par le CSS donc justes apres un resize. */
+#onde{position:absolute;left:0;top:15px;width:100%;height:calc(100% - 42px);
+ border-radius:4px;display:block}
+/* la regle de temps : sans elle, une piste zoomee ne dit plus ou l'on est */
+.grad{position:absolute;top:0;height:15px;width:1px;background:#2a2a30;pointer-events:none}
+.grad span{position:absolute;top:1px;left:4px;font:9.5px ui-monospace,monospace;color:#5c5c66;
+ font-variant-numeric:tabular-nums}
+/* hors du reel : hachure sombre, pour voir d'un coup ce qui ne sortira pas */
+.voile{position:absolute;top:0;bottom:0;pointer-events:none;z-index:2;
+ background:repeating-linear-gradient(135deg,rgba(9,9,10,.74) 0 6px,rgba(9,9,10,.86) 6px 12px)}
+.voile.g{border-radius:8px 0 0 8px}
+.voile.d{border-radius:0 8px 8px 0}
+/* une coupe : hachure rouge, et deux bords que l'on peut attraper */
+.coupe{position:absolute;top:0;bottom:0;min-width:3px;z-index:3;cursor:pointer;
+ background:repeating-linear-gradient(135deg,rgba(231,120,120,.30) 0 4px,rgba(9,9,10,.80) 4px 8px);
+ box-shadow:inset 1px 0 0 rgba(231,120,120,.55),inset -1px 0 0 rgba(231,120,120,.55)}
+.coupe.off{background:repeating-linear-gradient(135deg,rgba(231,120,120,.10) 0 4px,transparent 4px 9px);
+ box-shadow:inset 0 0 0 1px rgba(231,120,120,.30)}
+.coupe i{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;
+ background:rgba(255,255,255,.14)}
+.coupe i:hover{background:var(--ambre-clair)}
+.coupe i.bord-a{left:0}.coupe i.bord-b{right:0}
+.coupe.off i{display:none}
+/* les mots transcrits, sur la meme piste */
+.mot{position:absolute;bottom:5px;font:10px/14px -apple-system,system-ui,sans-serif;
+ color:#c8c8d0;white-space:nowrap;pointer-events:none;border-left:1px solid #43434d;
+ padding-left:3px;z-index:4}
+/* les cadrages poses */
+.mk{position:absolute;top:15px;bottom:27px;width:3px;background:var(--jaune);cursor:pointer;z-index:5}
 .mk:hover,.mk.on{background:#4ef;width:5px;margin-left:-1px}
-.mk span{position:absolute;top:-1px;left:4px;font:10px ui-monospace,monospace;color:var(--jaune);
+.mk span{position:absolute;top:1px;left:5px;font:10px ui-monospace,monospace;color:var(--jaune);
  white-space:nowrap;pointer-events:none}
-.tete{position:absolute;top:-3px;bottom:-3px;width:2px;background:#fff;pointer-events:none;
- box-shadow:0 0 6px #fff;z-index:6}
-.cut{position:absolute;top:0;bottom:0;background:rgba(255,91,122,.42);cursor:pointer;z-index:1}
-.cut.off{background:none;outline:1px dashed rgba(255,91,122,.55);outline-offset:-1px}
-.mot{position:absolute;top:26px;font:10px/13px -apple-system,system-ui,sans-serif;color:#dcdce2;
- white-space:nowrap;pointer-events:none;border-left:1px solid #4d4d57;padding-left:3px;z-index:2}
-.deb{position:absolute;top:0;bottom:0;width:3px;background:var(--vert);cursor:ew-resize;z-index:5}
-.deb::before{content:'';position:absolute;inset:0 -6px}
-.deb span{position:absolute;bottom:1px;left:5px;font:10px ui-monospace,monospace;color:var(--vert);
- pointer-events:none}
-.fin{position:absolute;top:0;bottom:0;width:3px;background:var(--rouge);pointer-events:none;z-index:5}
-.fin span{position:absolute;bottom:1px;right:5px;font:10px ui-monospace,monospace;color:var(--rouge);
- pointer-events:none}
-.debuts{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:9px;min-height:24px;
+.zone{position:absolute;top:15px;bottom:27px;background:rgba(117,167,255,.20);
+ border-left:2px solid #75a7ff;pointer-events:none;z-index:4}
+/* departs et fin : des poignees en capsule, comme les bornes de l'Atelier */
+.poignee{position:absolute;top:-2px;bottom:-2px;width:14px;z-index:7;cursor:ew-resize;
+ display:flex;align-items:center;justify-content:center;border-radius:6px 0 0 6px}
+.poignee::after{content:'';width:2px;height:22px;border-radius:2px;background:rgba(16,20,16,.65)}
+.poignee.debut{background:var(--vert);margin-left:-14px}
+.poignee.fin{background:var(--rouge);border-radius:0 6px 6px 0}
+.poignee:hover,.poignee.prise{filter:brightness(1.2);box-shadow:0 0 0 4px rgba(233,168,75,.18)}
+.poignee b{position:absolute;bottom:-1px;font:10px/1 ui-monospace,monospace;font-weight:600;
+ pointer-events:none;white-space:nowrap;background:rgba(9,9,11,.82);padding:2px 4px;
+ border-radius:4px}
+.poignee.debut b{left:17px;color:var(--vert)}
+.poignee.fin b{right:17px;color:var(--rouge)}
+/* le cadre du reel : deux liserés, haut et bas, entre le premier depart et la fin */
+.cadre-reel{position:absolute;top:0;bottom:0;pointer-events:none;z-index:6;
+ border-top:2px solid var(--vert);border-bottom:2px solid var(--vert);opacity:.8}
+/* le curseur n'est jamais saisissable : c'est la piste entiere qui l'est */
+.tete{position:absolute;top:-5px;bottom:-5px;width:2px;margin-left:-1px;border-radius:2px;
+ background:#f3f0e9;box-shadow:0 0 10px rgba(255,255,255,.45);pointer-events:none;z-index:9}
+
+/* sous la piste : la fenetre affichee et la legende */
+.souspiste{display:flex;align-items:center;gap:14px;margin:0 7px 8px;
+ font:11.5px ui-monospace,monospace;color:var(--tres-doux)}
+.souspiste .legende{font:11.5px -apple-system,system-ui,sans-serif}
+.souspiste .sp{flex:1}
+
+.debuts{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 7px 9px;min-height:24px;
  font-size:11px;color:var(--doux)}
 .chip{display:flex;align-items:center;gap:5px;background:#1d2922;border:1px solid #2f5b3c;
  border-radius:12px;padding:1px 4px 1px 9px;color:#cfe;font:11px ui-monospace,monospace}
@@ -132,7 +189,7 @@ textarea{display:none}
 .chip button{background:none;border:0;color:var(--vert);cursor:pointer;font-size:12px;padding:0 3px}
 .chip button.x{color:var(--rouge)}
 
-.cmd{display:flex;align-items:stretch;gap:0}
+.cmd{display:flex;align-items:stretch;gap:0;margin:0 7px}
 .groupe{display:flex;flex-direction:column;gap:6px;padding:0 14px;
  border-right:1px solid var(--bord);justify-content:flex-end}
 .groupe:first-child{padding-left:0}
@@ -153,7 +210,6 @@ button.fantome{background:transparent;border:1px solid var(--bord);color:var(--d
 button.fantome:hover{background:var(--gris-clair);color:var(--texte)}
 button.suite{padding:9px 16px;font-size:13px;background:var(--bleu);
  box-shadow:0 0 0 1px var(--bleu-clair),0 2px 10px rgba(35,34,224,.45)}
-.tc{font:13px ui-monospace,Menlo,monospace;color:var(--jaune);min-width:64px;text-align:center}
 .chk{display:flex;gap:5px;align-items:center;font-size:12px;color:#bbb;cursor:pointer;white-space:nowrap}
 
 /* ---- Variantes de lot ----------------------------------------------- */
@@ -248,25 +304,33 @@ body.reels .reel-seul{display:flex}
 <video id="vid" playsinline preload="auto" style="position:fixed;left:-4px;top:-4px;width:2px;height:2px;opacity:.01;pointer-events:none"></video>
 
 <div class="piste">
-  <div class="entete-piste">
-    <label class="zoom">Zoom de la piste <input id="zoom" type="range" min="1" max="12" value="1" step="1"></label>
-    <span id="legendePiste">Les mots sont sous la piste. Les zones rouges sont les coupes : un clic garde ou retire.</span>
+  <div class="transport">
+    <button class="lecture" id="play" title="Lecture / pause (Espace)" aria-label="Lecture">
+      <svg viewBox="0 0 12 14" id="glyphePlay"><path d="M1 1l10 6-10 6z"/></svg>
+    </button>
+    <span class="horloge" id="tc"><b>0:00.0</b> <span>/ 0:00.0</span></span>
+    <button class="act g" id="m10" title="Reculer de 10 s">−10 s</button>
+    <button class="act g" id="m1" title="Reculer de 1 s">−1 s</button>
+    <button class="act g" id="p1" title="Avancer de 1 s">+1 s</button>
+    <button class="act g" id="p10" title="Avancer de 10 s">+10 s</button>
+    <label class="chk reel-seul"><input type="checkbox" id="sauter" checked> Sauter les coupes</label>
+    <span style="flex:1"></span>
+    <span class="reel-seul" style="display:flex;gap:6px">
+      <button class="act g" id="supprimerBlancs"
+        title="Coupe tous les blancs proposés d'un coup. Réversible : « Tout garder ».">Supprimer les blancs</button>
+      <button class="act fantome" id="toutGarder"
+        title="Remet toutes les coupes en « gardé » : le reel repasse en continu.">Tout garder</button>
+    </span>
+    <button class="act fantome" id="toutVoir" title="Afficher la prise entière">Tout voir</button>
   </div>
-  <div class="timeline"><div class="rail" id="rail"><div class="tete" id="tete"></div></div></div>
+  <div class="rail" id="rail"><canvas id="onde"></canvas><div class="tete" id="tete"></div></div>
+  <div class="souspiste">
+    <span id="vueInfo">—</span><span class="sp"></span>
+    <span class="legende" id="legendePiste">Clic sur la piste pour s'y placer · molette : zoom · deux doigts : glisser</span>
+  </div>
   <div class="debuts reel-seul" id="debuts"></div>
 
   <div class="cmd">
-    <div class="groupe" aria-label="Lecture">
-      <span>Lecture <kbd>Espace</kbd> <kbd>←</kbd> <kbd>→</kbd></span>
-      <div class="boutons">
-        <button class="act" id="play">Lecture</button>
-        <span class="tc" id="tc">00:00.0</span>
-        <button class="act g" id="m10">−10 s</button><button class="act g" id="m1">−1 s</button>
-        <button class="act g" id="p1">+1 s</button><button class="act g" id="p10">+10 s</button>
-        <label class="chk reel-seul"><input type="checkbox" id="sauter" checked> Sauter les coupes</label>
-      </div>
-    </div>
-
     <div class="groupe reel-seul" aria-label="Bornes">
       <span>Bornes <kbd>I</kbd> début <kbd>O</kbd> fin <kbd>C</kbd> couper</span>
       <div class="boutons">
@@ -396,38 +460,260 @@ addEventListener('keydown',e=>{
  if(e.key==='ArrowLeft')c.x-=pas;else if(e.key==='ArrowRight')c.x+=pas;
  else if(e.key==='ArrowUp')c.y-=pas;else if(e.key==='ArrowDown')c.y+=pas;else return;
  e.preventDefault();clamp(actif);boites();garder()});
-// temps
+// ---- La piste : fenetre de vue, curseur attrapable, zoom a la molette ----
+// Reecrite d'apres la timeline de l'Atelier (meme auteur, code non publie ici).
+// Trois principes repris tels quels :
+//  - la piste entiere est la zone de scrub, le curseur n'est pas saisissable
+//    (pointer-events:none) : viser un trait de 2 px a la souris est injouable ;
+//  - tout est pose en pourcentage, donc un redimensionnement de fenetre ne
+//    demande aucun recalcul en JS ;
+//  - la boucle de rendu ne tourne que pendant la lecture et s'arrete d'elle-meme.
+// Le zoom a la molette, lui, n'existe pas dans l'Atelier : il est ecrit ici.
+const LARGE_MIN=0.4;             // on ne zoome pas plus serre que 0,4 s de piste
+let vue={a:0,b:1};               // la fenetre de temps que la piste montre
+let forme=null;                  // {par_seconde,pics:[0..255]} de la prise
+const COULEUR_ONDE=getComputedStyle(document.documentElement)
+ .getPropertyValue('--ambre').trim()||'#e9a84b';
+const pc=t=>Math.max(0,Math.min(100,(t-vue.a)/((vue.b-vue.a)||1)*100))+'%';
+const tempsEn=x=>{const r=vId('rail').getBoundingClientRect();
+ return vue.a+(r.width?Math.max(0,Math.min(1,(x-r.left)/r.width)):0)*(vue.b-vue.a)};
+function cadrerVue(){
+ const tout=Math.max(0.1,borneB-borneA);
+ const large=Math.max(Math.min(LARGE_MIN,tout),Math.min(tout,vue.b-vue.a));
+ vue.a=Math.max(borneA,Math.min(borneB-large,vue.a));vue.b=vue.a+large}
+function toutVoir(){vue={a:borneA,b:borneB};cadrerVue();rail()}
+vId('toutVoir').onclick=toutVoir;
+
 function place(t){vid.currentTime=Math.max(borneA,Math.min(borneB,t));maj()}
-function maj(){const t=vid.currentTime,m=Math.floor(t/60);
- vId('tc').textContent=String(m).padStart(2,'0')+':'+(t-60*m).toFixed(1).padStart(4,'0');
- vId('tete').style.left=((t-borneA)/(borneB-borneA)*100)+'%';
+function maj(){const t=vid.currentTime;
+ vId('tc').innerHTML=`<b>${hms(t)}</b> <span>/ ${hms(borneB)}</span>`;
+ const dedans=t>=vue.a&&t<=vue.b;
+ vId('tete').style.left=pc(t);vId('tete').style.opacity=dedans?1:0;
+ const n=(borneB-borneA)/((vue.b-vue.a)||1);
+ vId('vueInfo').textContent=n<1.02?`Piste entière · ${hms(borneB)}`
+  :`Fenêtre ${hms(vue.a)} → ${hms(vue.b)} · zoom ${n<10?n.toFixed(1):Math.round(n)}×`;
 }
+// La fenetre suit le curseur pendant la lecture : zoome, on perdait le son de vue.
+function suivreTete(t){
+ if(t>=vue.a&&t<=vue.b)return;
+ const large=vue.b-vue.a;vue.a=t-large*0.3;vue.b=vue.a+large;cadrerVue();rail()}
+
+// Molette verticale : zoom ancre sous le curseur. Deux doigts a l'horizontale :
+// on fait glisser. Le pincement du trackpad arrive comme une molette + ctrlKey ;
+// sans preventDefault le navigateur zoomerait la page entiere.
+vId('rail').addEventListener('wheel',e=>{
+ e.preventDefault();
+ const u=e.deltaMode===1?16:e.deltaMode===2?400:1;   // Firefox compte en lignes
+ const large=vue.b-vue.a;
+ if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){
+  vue.a+=e.deltaX*u/Math.max(1,vId('rail').clientWidth)*large;vue.b=vue.a+large}
+ else{
+  const r=vId('rail').getBoundingClientRect();
+  const part=r.width?Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)):0.5;
+  const ancre=vue.a+part*large;
+  const n=Math.max(LARGE_MIN,Math.min(borneB-borneA,
+   large*Math.exp(e.deltaY*u*(e.ctrlKey?0.012:0.0025))));
+  vue.a=ancre-part*n;vue.b=vue.a+n}
+ cadrerVue();rail()},{passive:false});
+
+// Un seul gestionnaire pour toute la piste : on identifie la cible au
+// pointerdown, et la capture garantit qu'un glissement rapide hors de la piste
+// ne lache pas la poignee en route.
+let prise=null;
 vId('rail').addEventListener('pointerdown',e=>{
- if(e.target.closest('.mk,.deb'))return;
- const r=e.currentTarget.getBoundingClientRect();place(borneA+(e.clientX-r.left)/r.width*(borneB-borneA))});
-vId('play').onclick=e=>{joue=!joue;
- if(joue){vid.play().catch(()=>{joue=false;e.target.textContent='Lecture';
-   vId('etat').textContent='Lecture refusée par le navigateur, reclique.'});
-  e.target.textContent='Pause'}
- else{vid.pause();e.target.textContent='Lecture'}};
-vid.addEventListener('pause',()=>{joue=false;vId('play').textContent='Lecture'});
-vid.addEventListener('play',()=>{joue=true;vId('play').textContent='Pause'});
+ if(e.button!==0)return;
+ e.currentTarget.setPointerCapture(e.pointerId);
+ const c=e.target.closest('[data-prise]');
+ if(!c){prise={quoi:'tete'};if(joue)vid.pause();place(tempsEn(e.clientX));return}
+ e.preventDefault();
+ const quoi=c.dataset.prise,i=+c.dataset.i;
+ prise={quoi,i,bord:c.dataset.bord,el:c,x0:e.clientX,bouge:false,
+        depart:quoi==='coupe'?{...coupes[i]}:null};
+ c.classList.add('prise')});
+vId('rail').addEventListener('pointermove',e=>{
+ if(!prise)return;
+ const t=tempsEn(e.clientX);
+ if(prise.quoi==='tete')return place(t);
+ // 2 px de jeu : sans ce seuil, le clic qui garde ou retire une coupe la
+ // deplacait de quelques millisecondes au passage
+ if(!prise.bouge&&Math.abs(e.clientX-prise.x0)<2)return;
+ prise.bouge=true;
+ if(prise.quoi==='debut'){
+  debuts[prise.i]=Math.max(borneA,Math.min(fin-0.1,t));
+  prise.el.style.left=pc(debuts[prise.i]);place(debuts[prise.i]);return}
+ if(prise.quoi==='fin'){
+  fin=Math.min(borneB,Math.max(Math.min(...debuts)+0.3,t));
+  prise.el.style.left=pc(fin);prise.el.querySelector('b').textContent='fin '+hms(fin);
+  place(fin);return}
+ if(prise.quoi==='coupe'){
+  if(!prise.bord)return;                     // le corps de la coupe ne la bouge pas
+  const c=coupes[prise.i],d=prise.depart,boite=prise.el.parentElement;
+  if(prise.bord==='a')c.a=Math.max(borneA,Math.min(d.b-0.06,t));
+  else c.b=Math.min(borneB,Math.max(d.a+0.06,t));
+  boite.style.left=pc(c.a);boite.style.width=`calc(${pc(c.b)} - ${pc(c.a)})`}});
+const lacher=()=>{
+ if(!prise)return;const p=prise;prise=null;
+ if(p.el)p.el.classList.remove('prise');
+ if(p.quoi==='tete')return;
+ if(!p.bouge){                               // un clic net, pas un glissement
+  if(p.quoi==='coupe'){coupes[p.i].on=!coupes[p.i].on;maj2()}
+  else place(p.quoi==='debut'?debuts[p.i]:fin);
+  return}
+ if(p.quoi==='debut'){debuts[p.i]=caler(debuts[p.i]);debuts.sort((a,b)=>a-b);place(debuts[p.i])}
+ if(p.quoi==='coupe'){const c=coupes[p.i];
+  c.a=+c.a.toFixed(3);c.b=+c.b.toFixed(3);c.on=true}
+ maj2()};
+vId('rail').addEventListener('pointerup',lacher);
+vId('rail').addEventListener('pointercancel',lacher);
+
+// Un clic pour couper tous les blancs, un clic pour tout remettre.
+vId('supprimerBlancs').onclick=()=>{if(!reel)return;coupes.forEach(c=>c.on=true);maj2()};
+vId('toutGarder').onclick=()=>{if(!reel)return;coupes.forEach(c=>c.on=false);maj2()};
+
+const GLYPHE={play:'M1 1l10 6-10 6z',pause:'M1 1h3.4v12H1zm6.6 0H11v12H7.6z'};
+function glyphe(){vId('glyphePlay').firstElementChild.setAttribute('d',joue?GLYPHE.pause:GLYPHE.play)}
+vId('play').onclick=()=>{
+ if(joue){vid.pause();return}
+ vid.play().catch(()=>{joue=false;glyphe();
+  vId('etat').textContent='Lecture refusée par le navigateur, reclique.'})};
+vid.addEventListener('pause',()=>{joue=false;glyphe()});
+vid.addEventListener('play',()=>{joue=true;glyphe();requestAnimationFrame(tourner)});
 for(const [id,d] of [['m10',-10],['m1',-1],['p1',1],['p10',10]])
  vId(id).onclick=()=>place((vid.currentTime)+d);
-setInterval(()=>{if(joue){maj();if(vid.currentTime>=borneB-0.05){vid.pause();place(borneB)}}},80);
+// Une seule boucle pendant la lecture, a la cadence de l'ecran : plus de
+// setInterval a 80 ms (le curseur sautait) ni de rAF qui tourne pour rien.
+function tourner(){
+ if(!joue)return;
+ const t=vid.currentTime;
+ // on saute les coupes actives : on entend le montage final, pas le rush
+ if(reel&&vId('sauter').checked){
+  const c=coupes.find(c=>c.on&&t>=c.a&&t<c.b-0.03);
+  if(c){vid.currentTime=c.b;return requestAnimationFrame(tourner)}}
+ if(t>=borneB-0.05){vid.pause();place(borneB);return}
+ if(!prise){maj();suivreTete(t)}
+ requestAnimationFrame(tourner)}
 // points
+// Un seul redessin pour toute la piste : regle, forme d'onde, voiles, coupes,
+// cadrages, mots, departs et fin. Appele a chaque changement, jamais en boucle.
 function rail(){
- const r=vId('rail');[...r.querySelectorAll('.mk,.zone,.cut,.deb,.fin')].forEach(n=>n.remove());
- if(reel)railReel(r);
+ const r=vId('rail');
+ cadrerVue();
+ [...r.querySelectorAll('.grad,.voile,.cadre-reel,.coupe,.mk,.zone,.mot,.poignee')]
+  .forEach(n=>n.remove());
+ dessinerOnde();
+ regle(r);
+ if(reel){voiles(r);coupesPiste(r)}
  const p=[...points].filter(dansPassage).sort((a,b)=>a.t-b.t);
  p.forEach((pt,i)=>{
   if(i<p.length-1&&pt.glisse){const z=document.createElement('div');z.className='zone';
-   z.style.left=((pt.t-borneA)/(borneB-borneA)*100)+'%';z.style.width=((p[i+1].t-pt.t)/(borneB-borneA)*100)+'%';r.appendChild(z)}
+   z.style.left=pc(pt.t);z.style.width=`calc(${pc(p[i+1].t)} - ${pc(pt.t)})`;r.appendChild(z)}
+  if(pt.t<vue.a||pt.t>vue.b)return;
   const d=document.createElement('div');d.className='mk'+(points.indexOf(pt)===sel?' on':'');
-  d.style.left=((pt.t-borneA)/(borneB-borneA)*100)+'%';
+  d.style.left=pc(pt.t);d.dataset.prise='cadre';d.dataset.i=points.indexOf(pt);
   const m=Math.floor(pt.t/60);d.innerHTML=`<span>${m}:${(pt.t-60*m).toFixed(0).padStart(2,'0')}</span>`;
   d.onclick=ev=>{ev.stopPropagation();aller(points.indexOf(pt))};
-  r.appendChild(d)});if(reel)motsEtDebuts()}
+  r.appendChild(d)});
+ if(reel){motsPiste(r);bornes(r)}
+ maj()}
+
+// La regle : sans elle, une piste zoomee ne dit plus ou l'on est.
+function regle(r){
+ const large=vue.b-vue.a,px=r.clientWidth||1;
+ const pas=[.1,.25,.5,1,2,5,10,15,30,60,120,300].find(v=>v/large*px>=62)||600;
+ const court=pas<1;
+ for(let k=Math.ceil(vue.a/pas);k*pas<vue.b;k++){
+  const s=k*pas,g=document.createElement('div');g.className='grad';g.style.left=pc(s);
+  g.innerHTML=`<span>${court?hms(s):hms(s).replace(/\.\d$/,'')}</span>`;r.appendChild(g)}
+}
+
+// La forme d'onde, dessinee sur mesure pour la fenetre affichee : les pics
+// viennent du JSON de la prise (preparer-reels.py), il n'y a donc rien a
+// decoder ni a aller chercher quand on zoome.
+function dessinerOnde(){
+ const c=vId('onde'),r=c.getBoundingClientRect();
+ if(!r.width||!r.height)return;
+ // dimensionne en pixels reels, sinon la forme d'onde bave sur un ecran dense.
+ // Plafonne a 2 : au-dela on paye quatre fois le dessin sans rien voir de plus.
+ const dpr=Math.min(devicePixelRatio||1,2);
+ const l=Math.round(r.width*dpr),h=Math.round(r.height*dpr);
+ if(c.width!==l||c.height!==h){c.width=l;c.height=h}
+ const x=c.getContext('2d');x.clearRect(0,0,l,h);
+ if(!forme||!forme.pics||!forme.pics.length)return;
+ const ps=forme.par_seconde,large=vue.b-vue.a;
+ // une barre par pixel, sauf quand on zoome plus serre que les donnees : les
+ // barres s'elargissent alors au lieu de se repeter betement
+ const n=Math.max(2,Math.min(Math.round(r.width),Math.ceil(large*ps)));
+ const pics=[];
+ for(let i=0;i<n;i++){
+  const k0=Math.floor((vue.a+large*i/n)*ps),k1=Math.ceil((vue.a+large*(i+1)/n)*ps);
+  let m=0;
+  for(let k=Math.max(0,k0);k<=Math.min(forme.pics.length-1,k1);k++)
+   if(forme.pics[k]>m)m=forme.pics[k];
+  pics.push(m/255)}
+ // plancher de normalisation : sur une fenetre presque muette, le maximum vaut
+ // trois fois rien et la moindre respiration remplirait toute la hauteur
+ let fort=0.08;for(const v of pics)if(v>fort)fort=v;
+ const mi=h/2,pas=l/n,ep=Math.max(dpr,pas*0.72);
+ x.fillStyle=COULEUR_ONDE;
+ for(let i=0;i<n;i++){
+  // racine : le son se lit en decibels, une hauteur lineaire ecrase les voix
+  const ht=Math.max(dpr,Math.pow(pics[i]/fort,0.75)*h*0.86);
+  x.fillRect(i*pas+(pas-ep)/2,mi-ht/2,ep,ht)}
+}
+
+// Hors du reel : on hachure. C'est ce qui ne sortira pas du rendu.
+function voiles(r){
+ const d0=debuts.length?Math.min(...debuts):borneA;
+ for(const [cl,a,b] of [['g',vue.a,d0],['d',fin,vue.b]]){
+  if(b<=a)continue;
+  const v=document.createElement('div');v.className='voile '+cl;
+  v.style.left=pc(a);v.style.width=`calc(${pc(b)} - ${pc(a)})`;r.appendChild(v)}
+ if(fin>d0){const k=document.createElement('div');k.className='cadre-reel';
+  k.style.left=pc(d0);k.style.width=`calc(${pc(fin)} - ${pc(d0)})`;r.appendChild(k)}}
+
+// Les coupes : hachure rouge, un clic garde ou retire, les deux bords se reglent.
+function coupesPiste(r){
+ // les blancs d'abord, les coupes a la main par-dessus : au meme endroit,
+ // c'est celle qu'on a posee soi-meme qu'on veut pouvoir attraper
+ coupes.map((c,i)=>[c,i])
+  .sort(([x],[y])=>(x.type==='blanc'?0:1)-(y.type==='blanc'?0:1))
+  .forEach(([c,i])=>{
+   if(c.b<vue.a||c.a>vue.b)return;
+   const z=document.createElement('div');z.className='coupe'+(c.on?'':' off');
+   z.dataset.prise='coupe';z.dataset.i=i;
+   z.style.left=pc(c.a);z.style.width=`calc(${pc(c.b)} - ${pc(c.a)})`;
+   z.title=`${{reprise:'Reprise',manuel:'Coupe manuelle'}[c.type]||'Blanc'} de `+
+    `${(c.b-c.a).toFixed(2)} s`+(c.texte?` : ${c.texte}`:'')+
+    (c.on?' — coupée':' — gardée')+'. Clic pour inverser, bords pour régler.';
+   z.innerHTML=`<i class="bord-a" data-prise="coupe" data-bord="a" data-i="${i}"></i>`+
+               `<i class="bord-b" data-prise="coupe" data-bord="b" data-i="${i}"></i>`;
+   r.appendChild(z)})}
+
+// Les mots transcrits, sur la meme piste. On n'en pose que ce qui tient : au
+// zoom arriere ils se chevaucheraient en bouillie illisible.
+function motsPiste(r){
+ const px=r.clientWidth||1;let libre=0;
+ for(const [a,,txt] of mots){
+  if(a>vue.b)break;
+  if(a<vue.a)continue;
+  const x=(a-vue.a)/((vue.b-vue.a)||1)*px;
+  if(x<libre)continue;
+  const s=document.createElement('div');s.className='mot';s.style.left=x+'px';s.textContent=txt;
+  r.appendChild(s);libre=x+s.offsetWidth+5}}
+
+// Les departs et la fin restent visibles et se glissent a la souris.
+function bornes(r){
+ debuts.forEach((t,i)=>{
+  if(t<vue.a||t>vue.b)return;
+  const k=document.createElement('div');k.className='poignee debut';
+  k.dataset.prise='debut';k.dataset.i=i;k.style.left=pc(t);
+  k.innerHTML=`<b>D${i+1}</b>`;k.title=`Départ ${i+1} à ${hms(t)} — à glisser`;
+  r.appendChild(k)});
+ if(fin>=vue.a&&fin<=vue.b){
+  const f=document.createElement('div');f.className='poignee fin';
+  f.dataset.prise='fin';f.dataset.i=0;f.style.left=pc(fin);
+  f.innerHTML=`<b>fin ${hms(fin)}</b>`;f.title=`Fin du reel à ${hms(fin)} — à glisser`;
+  r.appendChild(f)}}
 function aller(i){sel=i;const p=points[i];
  crop.A={...p.A};crop.B={...p.B};place(p.t);boites();table();rail();vId('maj').disabled=false}
 function table(){
@@ -519,7 +805,7 @@ selP.onchange=()=>{
  if(REELS)return chargerReel(selP.value);
  if(selP.value===''){borneA=0;borneB=DUREE}
  else{const p=PASSAGES[+selP.value];borneA=p[1];borneB=p[2]}
- place(borneA);sel=-1;vId('maj').disabled=true;table();rail();maj()};
+ place(borneA);sel=-1;vId('maj').disabled=true;toutVoir();table()};
 function reflets(){
  for(const [c,ctx2,dec] of [[mirA,mcA,0],[mirB,mcB,DEMI]]){
   if(c.width!==DEMI){c.width=DEMI;c.height=360}
@@ -532,7 +818,7 @@ let boucles=false;
 vid.addEventListener('loadeddata',()=>{
  dimensionnerPanneaux();
  if(reel)place(debuts[0]||0);
- boites();table();rail();if(reel){motsEtDebuts();chips()}
+ boites();table();rail();if(reel)chips()
  if(!boucles){boucles=true;apercu();reflets()}});
 // Chaque panneau prend la taille exacte de l'image qu'il montre : le 16:9 des
 // sources, le format cible pour l'apercu. Plus de noir perdu autour (brief 2.2).
@@ -555,7 +841,7 @@ function dimensionnerPanneaux(){
  boites();
 }
 new ResizeObserver(dimensionnerPanneaux).observe(document.querySelector('main'));
-addEventListener('resize',()=>{dimensionnerPanneaux();if(reel)motsEtDebuts()});
+addEventListener('resize',()=>{dimensionnerPanneaux();rail()});
 
 // ---- Reels : une prise = un proxy, plusieurs debuts, coupes proposees ----
 // reels/reels.json liste les prises (scripts/preparer-reels.py). Chaque prise a
@@ -649,39 +935,9 @@ async function chargerReel(id){
  poserEtat(validations[reel.id]?'Ce reel a déjà été envoyé en production depuis ce navigateur.':'Prêt à envoyer.',
   validations[reel.id]?'pret':'');
  vid.src=reel.proxy;vid.load();
- table();rail();motsEtDebuts();chips();maj();
+ forme=d.forme||null;toutVoir();table();chips();
  vId('reelPrec').disabled=selP.selectedIndex===0;vId('reelSuiv').disabled=selP.selectedIndex===selP.options.length-1;}
-function maj2(){motsEtDebuts();chips();rail();sortie()}
-function railReel(r){
- [...coupes].sort((x,y)=>(x.type==='blanc'?0:1)-(y.type==='blanc'?0:1)).forEach(c=>{const z=document.createElement('div');z.className='cut'+(c.on?'':' off');
-  z.style.left=(c.a/DUREE*100)+'%';z.style.width=Math.max(.12,(c.b-c.a)/DUREE*100)+'%';
-  z.title=`${{reprise:'Reprise',manuel:'Coupe manuelle'}[c.type]||'Blanc'} de ${(c.b-c.a).toFixed(2)} s`+
-   (c.texte?` : ${c.texte}`:'')+(c.on?' (coupe)':' (garde)')+'. Clic pour inverser.';
-  z.addEventListener('pointerdown',ev=>{ev.stopPropagation();c.on=!c.on;maj2()});r.appendChild(z)});
- const f=document.createElement('div');f.className='fin';f.style.left=(fin/DUREE*100)+'%';
- f.innerHTML=`<span>fin ${hms(fin)}</span>`;f.title=`Fin du reel à ${hms(fin)}`;r.appendChild(f)}
-function motsEtDebuts(){
- const m=vId('rail');[...m.querySelectorAll('.mot,.grad,.deb')].forEach(n=>n.remove());
- const W=DUREE,px=m.clientWidth;let libre=0;
- // reperes de temps : sans eux la piste zoomee ne dit plus ou l'on est
- const pas=[1,2,5,10,15,30,60,120,300].find(v=>v/W*px>=58)||300;
- for(let t=pas;t<W;t+=pas){const g=document.createElement('div');g.className='grad';
-  g.style.left=(t/W*100)+'%';g.innerHTML=`<span>${hms(t).replace(/\.\d$/,'')}</span>`;m.appendChild(g)}
- for(const [a,,txt] of mots){if(a>W)break;const x=a/W*px;if(x<libre)continue;
-  const s=document.createElement('div');s.className='mot';s.style.left=x+'px';s.textContent=txt;m.appendChild(s);
-  libre=x+s.offsetWidth+4}
- debuts.forEach((t,i)=>{const k=document.createElement('div');k.className='deb';
-  k.style.left=(t/W*100)+'%';k.innerHTML=`<span>D${i+1}</span>`;
-  k.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();
-   const r=m.getBoundingClientRect();
-   const bouge=ev=>{debuts[i]=Math.max(0,Math.min(W,(ev.clientX-r.left)/r.width*W));
-    k.style.left=(debuts[i]/W*100)+'%';place(debuts[i])};
-   const lache=()=>{removeEventListener('pointermove',bouge);removeEventListener('pointerup',lache);
-    debuts[i]=caler(debuts[i]);place(debuts[i]);maj2()};
-   addEventListener('pointermove',bouge);addEventListener('pointerup',lache)});
-  m.appendChild(k)});
- maj()}
-vId('zoom').oninput=()=>{vId('rail').style.width=(100*Number(vId('zoom').value))+'%';rail();maj()};
+function maj2(){rail();chips();sortie()}
 function chips(){
  vId('exporter').hidden=debuts.length<2;
  const c=vId('debuts');c.textContent='';
@@ -728,11 +984,6 @@ vId('couperIci').onclick=()=>{if(!reel)return;
  if(z-a<0.05)return;
  coupes.push({a:+a.toFixed(3),b:+z.toFixed(3),type:'manuel',on:true,texte:'coupe ajoutée à la main'});maj2()};
 vId('titre').addEventListener('input',sortie);
-// pendant la lecture, on saute les coupes actives : on entend le montage final
-(function sauter(){
- if(joue&&reel&&vId('sauter').checked){const t=vid.currentTime;
-  const c=coupes.find(c=>c.on&&t>=c.a&&t<c.b-0.03);if(c)vid.currentTime=c.b}
- requestAnimationFrame(sauter)})();
 vId('exporter').onclick=()=>envoyerProduction('/exporter');
 // Le bouton reste eteint tant que le rendu tourne : reclique, on empilait un
 // second encodage identique dans la file, pour rien.

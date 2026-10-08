@@ -72,6 +72,7 @@ BLANC_MIN = 0.25          # en dessous, c'est une respiration de phrase
 BLANC_COUPE = 0.45        # un blanc plus long est resserre...
 PAUSE_AVANT = 0.12        # ... en gardant 0,12 s apres la fin du son
 PAUSE_APRES = 0.10        # ... et 0,10 s avant la reprise de parole
+FORME_PAR_SECONDE = 50   # points de forme d'onde par seconde dessines sur la piste
 
 
 def duree(chemin):
@@ -169,6 +170,32 @@ def niveaux(wav_):
         e = sum(v * v for v in s[i:i + k]) / k
         res.append(10 * math.log10(e / 32768 ** 2) if e else -99.0)
     return res
+
+
+def forme_donde(wav_, par_seconde=FORME_PAR_SECONDE):
+    """Pic d'amplitude par tranche de 20 ms, ramene entre 0 et 255.
+
+    Le pic et non le niveau moyen : sur une tranche aussi courte, la moyenne
+    ecrase les attaques et la piste devient une bouillie plate ou l'on ne
+    reconnait plus une phrase. On dessine ce qu'on entend.
+
+    Le plafond est le 99e centile des pics, pas le maximum : un seul claquement
+    de porte ou un clic de stylet suffisait a ecraser toute la prise au ras du
+    sol. Les rares tranches au-dessus sont ramenees a 255.
+    """
+    with wave.open(str(wav_)) as w:
+        taux, brut = w.getframerate(), w.readframes(w.getnframes())
+    s = array("h")
+    s.frombytes(brut)
+    k = max(1, taux // par_seconde)
+    pics = []
+    for i in range(0, len(s), k):
+        bloc = s[i:i + k]
+        pics.append(max(max(bloc), -min(bloc)) if bloc else 0)
+    tries = sorted(pics)
+    plafond = max(1, tries[min(len(tries) - 1, int(len(tries) * 0.99))] if tries else 1)
+    return {"par_seconde": par_seconde,
+            "pics": [min(255, round(p * 255 / plafond)) for p in pics]}
 
 
 def blancs(db, minimum=BLANC_MIN):
@@ -442,6 +469,7 @@ def main():
             print(f"[{n}] visage repere sur {len(piste)} images", flush=True)
         contenu = {"mots": mots_, "blancs": longs, "coupes": propositions,
                    "debuts": debuts, "debut": debuts[0], "fin": fin,
+                   "forme": forme_donde(w),
                    "titre": decisions.get(n, {}).get("titre", "")}
         if piste is not None:
             contenu["visage"] = piste

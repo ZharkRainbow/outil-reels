@@ -16,16 +16,24 @@ contient les deux rushes côte à côte, plus le son. Un seul élément vidéo :
 peut pas se désynchroniser d'avec lui-même. C'était la vraie cause des « bugs de
 synchro » des versions précédentes.
 
-**Les silences sont détectés et proposés en coupe.** Ils s'affichent en rouge sur
-la piste. Un clic garde, un clic coupe. Le bouton « Couper ici » ajoute une coupe
-manuelle, dont les bords se collent automatiquement au blanc le plus proche. La
-case « Sauter les coupes » lit le montage final, pour entendre le résultat avant
-de rendre.
+**Une seule piste, avec la forme d'onde.** Les pics sont calculés à la
+préparation et stockés dans le JSON de la prise : zoomer ne redemande rien au
+serveur. Le curseur de lecture s'attrape à la souris, un clic n'importe où sur la
+piste s'y place, la molette zoome autour du pointeur (deux doigts à l'horizontale
+pour glisser, « Tout voir » pour revenir). Mots transcrits, coupes, départs et
+fin sont sur cette même piste.
 
-**Le point de départ se règle au mot près.** Une mini-timeline zoomée sur le
-début affiche les mots transcrits. Tu glisses un marqueur, il se recale tout seul
-juste avant la reprise de parole. Tu peux poser plusieurs départs : chacun produit
-un fichier, pour tester deux accroches sur la même prise.
+**Les silences sont détectés et proposés en coupe.** Ils s'affichent hachurés en
+rouge. Un clic garde, un clic coupe, les deux bords se règlent à la souris.
+« Supprimer les blancs » les coupe tous d'un geste, « Tout garder » remet le reel
+en continu. Le bouton « Couper ici » ajoute une coupe manuelle, dont les bords se
+collent au blanc le plus proche. La case « Sauter les coupes » lit le montage
+final, pour entendre le résultat avant de rendre.
+
+**Le point de départ se règle au mot près.** Les mots transcrits sont posés sous
+la forme d'onde. Tu glisses un départ, il se recale tout seul juste avant la
+reprise de parole. Tu peux en poser plusieurs : chacun produit un fichier, pour
+tester deux accroches sur la même prise.
 
 **Le cadrage est horodaté.** Deux cadres verrouillés aux proportions du format
 choisi, un aperçu en direct du rendu final. Tu poses un point de cadrage à un
@@ -273,8 +281,8 @@ Une nouvelle préparation avec `--lot reels` reprend ses réglages dans `lots/re
 Le bouton secondaire **Exporter (un fichier par début)** apparaît dès qu'il y a
 plusieurs départs ; les deux modes de rendu produisent alors toutes les variantes.
 
-Sur la piste unique, utiliser le zoom pour lire les mots et glisser les départs.
-`Espace` lance la lecture, `←`/`→` déplacent d'une seconde (`Maj` : dix secondes),
+Sur la piste, la molette zoome autour du pointeur pour lire les mots et poser les
+départs au bon endroit. `Espace` lance la lecture, `←`/`→` déplacent d'une seconde (`Maj` : dix secondes),
 `I` ajoute un début, `O` pose la fin, `C` commence/termine une coupe.
 `Alt` + flèches déplace le cadre sélectionné.
 
