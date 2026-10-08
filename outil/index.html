@@ -483,10 +483,10 @@ async function envoyerProduction(route){
   const r=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:vId('sortie').value});
   const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.erreur||'Envoi refusé');
   if(reel){validations[reel.id]=true;try{localStorage.setItem(CLE+'-validations',JSON.stringify(validations))}catch(err){}marquerReels()}
-  if(j.nom){poserEtat('En file d’attente : '+j.nom,'attente');suivre(j.nom)}
+  if(j.nom){poserEtat('En file d’attente : '+j.nom,'attente');return suivre(j.nom,b)}
   else poserEtat('Cadrage enregistré : '+j.fichier,'pret');
  }catch(err){poserEtat('Échec de l’envoi : '+err.message,'rate')}
- finally{b.disabled=false}
+ b.disabled=false;
 }
 vId('envoyer').onclick=()=>envoyerProduction('/enregistrer');
 vId('copier').onclick=async()=>{try{await navigator.clipboard.writeText(vId('sortie').value);
@@ -734,12 +734,17 @@ vId('titre').addEventListener('input',sortie);
   const c=coupes.find(c=>c.on&&t>=c.a&&t<c.b-0.03);if(c)vid.currentTime=c.b}
  requestAnimationFrame(sauter)})();
 vId('exporter').onclick=()=>envoyerProduction('/exporter');
-function suivre(nom){
+// Le bouton reste eteint tant que le rendu tourne : reclique, on empilait un
+// second encodage identique dans la file, pour rien.
+function suivre(nom,bouton){
  clearInterval(suivre.t);
+ if(bouton){bouton.disabled=true;bouton.dataset.libelle=bouton.dataset.libelle||bouton.textContent;
+  bouton.textContent='Rendu en cours…'}
+ const rendre=()=>{if(!bouton)return;bouton.disabled=false;bouton.textContent=bouton.dataset.libelle};
  suivre.t=setInterval(async()=>{try{
   const j=await fetch('/export-etat?nom='+encodeURIComponent(nom)).then(r=>r.json());
   poserEtat(j.texte,!j.fini?(/file d/.test(j.texte)?'attente':'cours'):(j.ok?'pret':'rate'));
-  if(j.fini)clearInterval(suivre.t)}catch(err){}},1500)}
+  if(j.fini){clearInterval(suivre.t);rendre()}}catch(err){}},1500)}
 fetch('/lots/'+encodeURIComponent(LOTP)+'/reels.json?'+Date.now()).then(r=>r.ok?r.json():null).then(j=>{
  if(!j||!j.reels||!j.reels.length)throw new Error('Lot absent ou vide');
  const base=new URL('/lots/'+encodeURIComponent(LOTP)+'/',location.href);
